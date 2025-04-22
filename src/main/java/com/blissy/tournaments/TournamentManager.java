@@ -506,5 +506,6 @@ public class TournamentManager {
         public boolean isValidPokemonLevel(int pokemonLevel) {
             return pokemonLevel >= minLevel && pokemonLevel <= maxLevel;
         }
+
     }
 }
