@@ -14,7 +14,14 @@
       "leaderboard_4": 14,
       "leaderboard_5": 15,
       "leaderboard_6": 16,
-      "stats_book_slot": 13
+      "leaderboard_7": 21,
+      "stats_book_slot": 13,
+      "recurring_label_slot": 27,
+      "player_label_slot": 36,
+      "recurring_show_all_slot": 35,
+      "player_show_all_slot": 44,
+      "recurring_matches_start": 28,
+      "player_matches_start": 37
     },
     "items": {
       "join_button": {
@@ -46,6 +53,30 @@
         "name": "Back",
         "color": "gray",
         "action": "back"
+      },
+      "recurring_label": {
+        "item": "minecraft:paper",
+        "name": "Recurring Tournaments",
+        "color": "gold",
+        "action": "none"
+      },
+      "player_label": {
+        "item": "minecraft:paper",
+        "name": "Player Tournaments",
+        "color": "gold",
+        "action": "none"
+      },
+      "recurring_show_all": {
+        "item": "minecraft:book",
+        "name": "Show All Recurring Tournaments",
+        "color": "gold",
+        "action": "show_all_recurring"
+      },
+      "player_show_all": {
+        "item": "minecraft:book",
+        "name": "Show All Player Tournaments",
+        "color": "gold",
+        "action": "show_all_player"
       }
     },
     "tournament_items": {
@@ -60,11 +91,14 @@
       },
       "ended": {
         "item": "minecraft:writable_book"
+      },
+      "recurring": {
+        "item": "minecraft:clock"
       }
     },
     "borders": {
       "outer_border": {
-        "item": "minecraft:black_stained_glass_pane",
+        "item": "minecraft:blue_stained_glass_pane",
         "name": " ",
         "slots": [
           0,
@@ -77,6 +111,8 @@
           8,
           9,
           17,
+          18,
+          26,
           45,
           46,
           47,
@@ -89,17 +125,15 @@
         ]
       },
       "inner_border": {
-        "item": "minecraft:gray_stained_glass_pane",
+        "item": "minecraft:blue_stained_glass_pane",
         "name": " ",
         "slots": [
-          10,
-          16,
           19,
-          25,
-          28,
-          34,
-          37,
-          43
+          20,
+          22,
+          23,
+          24,
+          25
         ]
       }
     }
@@ -161,7 +195,7 @@
         ]
       },
       "inner_border": {
-        "item": "minecraft:light_blue_stained_glass_pane",
+        "item": "minecraft:blue_stained_glass_pane",
         "name": " ",
         "slots": [
           10,
@@ -218,6 +252,18 @@
         "color": "green",
         "action": "setMaxParticipants"
       },
+      "recurring_field": {
+        "item": "minecraft:clock",
+        "name": "Make Recurring Tournament",
+        "color": "light_purple",
+        "action": "setRecurring"
+      },
+      "recurrence_interval_field": {
+        "item": "minecraft:redstone_lamp",
+        "name": "Recurrence Interval (Hours)",
+        "color": "red",
+        "action": "setRecurrenceInterval"
+      },
       "create_button": {
         "item": "minecraft:emerald",
         "name": "Create Tournament",
@@ -227,7 +273,7 @@
     },
     "borders": {
       "outer_border": {
-        "item": "minecraft:green_stained_glass_pane",
+        "item": "minecraft:blue_stained_glass_pane",
         "name": " ",
         "slots": [
           0,
@@ -254,6 +300,70 @@
           51,
           52,
           53
+        ]
+      }
+    }
+  },
+  "recurring_matches_screen": {
+    "title": "Recurring Tournaments",
+    "title_item": "minecraft:clock",
+    "slots": {
+      "title_slot": 4,
+      "back_button_slot": 0,
+      "matches_start_slot": 9
+    },
+    "items": {
+      "back_button": {
+        "item": "minecraft:arrow",
+        "name": "Back",
+        "color": "gray",
+        "action": "back"
+      }
+    },
+    "borders": {
+      "outer_border": {
+        "item": "minecraft:blue_stained_glass_pane",
+        "name": " ",
+        "slots": [
+          1,
+          2,
+          3,
+          5,
+          6,
+          7,
+          8
+        ]
+      }
+    }
+  },
+  "player_matches_screen": {
+    "title": "Player Tournaments",
+    "title_item": "minecraft:player_head",
+    "slots": {
+      "title_slot": 4,
+      "back_button_slot": 0,
+      "matches_start_slot": 9
+    },
+    "items": {
+      "back_button": {
+        "item": "minecraft:arrow",
+        "name": "Back",
+        "color": "gray",
+        "action": "back"
+      }
+    },
+    "borders": {
+      "outer_border": {
+        "item": "minecraft:blue_stained_glass_pane",
+        "name": " ",
+        "slots": [
+          1,
+          2,
+          3,
+          5,
+          6,
+          7,
+          8
         ]
       }
     }

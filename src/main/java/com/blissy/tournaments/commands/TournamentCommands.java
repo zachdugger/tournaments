@@ -6,13 +6,17 @@ import com.blissy.tournaments.battle.ReadyCheckManager;
 import com.blissy.tournaments.compat.PixelmonHandler;
 import com.blissy.tournaments.config.TournamentsConfig;
 import com.blissy.tournaments.config.UIConfigLoader;
+import com.blissy.tournaments.data.RecurringTournament;
 import com.blissy.tournaments.data.Tournament;
 import com.blissy.tournaments.data.TournamentMatch;
 import com.blissy.tournaments.data.TournamentParticipant;
 import com.blissy.tournaments.gui.TournamentCreationGUI;
 import com.blissy.tournaments.gui.TournamentMainGUI;
+import com.blissy.tournaments.gui.TournamentRecurringCreationGUI;
+import com.blissy.tournaments.handlers.RecurringTournamentHandler;
 import com.blissy.tournaments.elo.EloManager;
 import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.arguments.DoubleArgumentType;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import net.minecraft.command.CommandSource;
@@ -31,6 +35,7 @@ import net.minecraftforge.fml.server.ServerLifecycleHooks;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -133,6 +138,34 @@ public class TournamentCommands {
                                     return 1;
                                 })
                         )
+                        .then(Commands.literal("listrecurring")
+                                .executes(context -> {
+                                    ServerPlayerEntity player = context.getSource().getPlayerOrException();
+                                    List<RecurringTournament> recurringTournaments = RecurringTournament.getAllRecurringTournaments();
+
+                                    if (recurringTournaments.isEmpty()) {
+                                        player.sendMessage(
+                                                new StringTextComponent("No recurring tournaments configured")
+                                                        .withStyle(TextFormatting.YELLOW),
+                                                player.getUUID());
+                                    } else {
+                                        player.sendMessage(
+                                                new StringTextComponent("Recurring Tournaments:")
+                                                        .withStyle(TextFormatting.GOLD),
+                                                player.getUUID());
+
+                                        for (RecurringTournament tournament : recurringTournaments) {
+                                            player.sendMessage(
+                                                    new StringTextComponent("- " + tournament.getName() +
+                                                            " (Template: " + tournament.getTemplateName() +
+                                                            ", Recurs every " + formatHours(tournament.getRecurrenceHours()) + ")")
+                                                            .withStyle(TextFormatting.AQUA),
+                                                    player.getUUID());
+                                        }
+                                    }
+                                    return 1;
+                                })
+                        )
                         .then(Commands.literal("ready")
                                 .executes(context -> {
                                     ServerPlayerEntity player = context.getSource().getPlayerOrException();
@@ -162,7 +195,7 @@ public class TournamentCommands {
                                 })
                         )
                         .then(Commands.literal("create")
-                                .requires(source -> source.hasPermission(2)) // Requires permission level 2
+                                .requires(source -> RecurringTournamentHandler.canCreatePlayerTournament(source.getPlayerOrException()))
                                 .executes(context -> {
                                     ServerPlayerEntity player = context.getSource().getPlayerOrException();
                                     TournamentCreationGUI.openCreationGUI(player);
@@ -187,6 +220,35 @@ public class TournamentCommands {
                                                     TournamentCreationGUI.createTournament(player, name, 100, 100, size, "SINGLE_ELIMINATION");
                                                     return 1;
                                                 })
+                                        )
+                                )
+                        )
+                        .then(Commands.literal("createrecurring")
+                                .requires(source -> RecurringTournamentHandler.canCreateRecurringTournament(source.getPlayerOrException()))
+                                .executes(context -> {
+                                    ServerPlayerEntity player = context.getSource().getPlayerOrException();
+                                    TournamentRecurringCreationGUI.openCreationGUI(player);
+                                    return 1;
+                                })
+                                .then(Commands.argument("id", StringArgumentType.string())
+                                        .then(Commands.argument("templateName", StringArgumentType.string())
+                                                .then(Commands.argument("interval", DoubleArgumentType.doubleArg(0.1))
+                                                        .executes(context -> {
+                                                            ServerPlayerEntity player = context.getSource().getPlayerOrException();
+                                                            String id = StringArgumentType.getString(context, "id");
+                                                            String templateName = StringArgumentType.getString(context, "templateName");
+                                                            double interval = DoubleArgumentType.getDouble(context, "interval");
+
+                                                            // Store settings in player data
+                                                            TournamentRecurringCreationGUI.storeRecurringCreationSetting(player, "recurringId", id);
+                                                            TournamentRecurringCreationGUI.storeRecurringCreationSetting(player, "templateName", templateName);
+                                                            TournamentRecurringCreationGUI.storeRecurringCreationSetting(player, "recurrenceInterval", String.valueOf(interval));
+
+                                                            // Create with default values for other parameters
+                                                            TournamentRecurringCreationGUI.createRecurringTournament(player);
+                                                            return 1;
+                                                        })
+                                                )
                                         )
                                 )
                         )
@@ -216,6 +278,39 @@ public class TournamentCommands {
                                             } else {
                                                 player.sendMessage(
                                                         new StringTextComponent("Failed to delete tournament: " + tournamentName)
+                                                                .withStyle(TextFormatting.RED),
+                                                        player.getUUID());
+                                            }
+                                            return 1;
+                                        })
+                                )
+                        )
+                        .then(Commands.literal("deleterecurring")
+                                .requires(source -> RecurringTournamentHandler.canCreateRecurringTournament(source.getPlayerOrException()))
+                                .then(Commands.argument("id", StringArgumentType.string())
+                                        .executes(context -> {
+                                            ServerPlayerEntity player = context.getSource().getPlayerOrException();
+                                            String id = StringArgumentType.getString(context, "id");
+
+                                            // Check if the recurring tournament exists
+                                            RecurringTournament recurringTournament = RecurringTournament.getRecurringTournament(id);
+                                            if (recurringTournament == null) {
+                                                player.sendMessage(
+                                                        new StringTextComponent("Recurring tournament not found: " + id)
+                                                                .withStyle(TextFormatting.RED),
+                                                        player.getUUID());
+                                                return 0;
+                                            }
+
+                                            // Delete the recurring tournament
+                                            if (RecurringTournament.deleteRecurringTournament(id)) {
+                                                player.sendMessage(
+                                                        new StringTextComponent("Recurring tournament deleted: " + id)
+                                                                .withStyle(TextFormatting.GREEN),
+                                                        player.getUUID());
+                                            } else {
+                                                player.sendMessage(
+                                                        new StringTextComponent("Failed to delete recurring tournament: " + id)
                                                                 .withStyle(TextFormatting.RED),
                                                         player.getUUID());
                                             }
@@ -275,6 +370,32 @@ public class TournamentCommands {
                                                             .withStyle(TextFormatting.YELLOW),
                                                     player.getUUID());
                                         }
+                                    }
+
+                                    // Debug recurring tournaments
+                                    player.sendMessage(
+                                            new StringTextComponent("Debugging recurring tournaments...")
+                                                    .withStyle(TextFormatting.YELLOW),
+                                            player.getUUID());
+
+                                    List<RecurringTournament> recurringTournaments = RecurringTournament.getAllRecurringTournaments();
+                                    player.sendMessage(
+                                            new StringTextComponent("Recurring tournaments: " + recurringTournaments.size())
+                                                    .withStyle(TextFormatting.YELLOW),
+                                            player.getUUID());
+
+                                    for (RecurringTournament tournament : recurringTournaments) {
+                                        player.sendMessage(
+                                                new StringTextComponent("- " + tournament.getName() +
+                                                        " (Template: " + tournament.getTemplateName() +
+                                                        ", Recurrence: " + formatHours(tournament.getRecurrenceHours()) + ")")
+                                                        .withStyle(TextFormatting.YELLOW),
+                                                player.getUUID());
+
+                                        player.sendMessage(
+                                                new StringTextComponent("  Next Occurrence: " + formatTimeUntil(tournament.getNextScheduled()))
+                                                        .withStyle(TextFormatting.YELLOW),
+                                                player.getUUID());
                                     }
 
                                     // Debug active battles
@@ -496,6 +617,100 @@ public class TournamentCommands {
                                     return 1;
                                 })
                         )
+                        .then(Commands.literal("forcechecktournaments")
+                                .requires(source -> source.hasPermission(2))
+                                .executes(context -> {
+                                    ServerPlayerEntity player = context.getSource().getPlayerOrException();
+                                    RecurringTournament.checkAllRecurringTournaments();
+                                    player.sendMessage(
+                                            new StringTextComponent("Forced recurring tournament check completed")
+                                                    .withStyle(TextFormatting.GREEN),
+                                            player.getUUID());
+                                    return 1;
+                                })
+                        )
+                        .then(Commands.literal("givecreatepermission")
+                                .requires(source -> source.hasPermission(2))
+                                .then(Commands.argument("player", StringArgumentType.string())
+                                        .executes(context -> {
+                                            ServerPlayerEntity admin = context.getSource().getPlayerOrException();
+                                            String playerName = StringArgumentType.getString(context, "player");
+
+// Find the target player
+                                            ServerPlayerEntity targetPlayer = null;
+                                            for (ServerPlayerEntity p : context.getSource().getServer().getPlayerList().getPlayers()) {
+                                                if (p.getName().getString().equalsIgnoreCase(playerName)) {
+                                                    targetPlayer = p;
+                                                    break;
+                                                }
+                                            }
+
+                                            if (targetPlayer == null) {
+                                                admin.sendMessage(
+                                                        new StringTextComponent("Player not found: " + playerName)
+                                                                .withStyle(TextFormatting.RED),
+                                                        admin.getUUID());
+                                                return 0;
+                                            }
+
+                                            // Give permission
+                                            RecurringTournamentHandler.setPlayerTournamentPermission(targetPlayer, true);
+
+                                            admin.sendMessage(
+                                                    new StringTextComponent("Tournament creation permission granted to " + playerName)
+                                                            .withStyle(TextFormatting.GREEN),
+                                                    admin.getUUID());
+
+                                            targetPlayer.sendMessage(
+                                                    new StringTextComponent("You have been granted permission to create tournaments")
+                                                            .withStyle(TextFormatting.GREEN),
+                                                    targetPlayer.getUUID());
+
+                                            return 1;
+                                        })
+                                )
+                        )
+                        .then(Commands.literal("revokecreatepermission")
+                                .requires(source -> source.hasPermission(2))
+                                .then(Commands.argument("player", StringArgumentType.string())
+                                        .executes(context -> {
+                                            ServerPlayerEntity admin = context.getSource().getPlayerOrException();
+                                            String playerName = StringArgumentType.getString(context, "player");
+
+                                            // Find the target player
+                                            ServerPlayerEntity targetPlayer = null;
+                                            for (ServerPlayerEntity p : context.getSource().getServer().getPlayerList().getPlayers()) {
+                                                if (p.getName().getString().equalsIgnoreCase(playerName)) {
+                                                    targetPlayer = p;
+                                                    break;
+                                                }
+                                            }
+
+                                            if (targetPlayer == null) {
+                                                admin.sendMessage(
+                                                        new StringTextComponent("Player not found: " + playerName)
+                                                                .withStyle(TextFormatting.RED),
+                                                        admin.getUUID());
+                                                return 0;
+                                            }
+
+                                            // Revoke permission
+                                            RecurringTournamentHandler.setPlayerTournamentPermission(targetPlayer, false);
+
+                                            admin.sendMessage(
+                                                    new StringTextComponent("Tournament creation permission revoked from " + playerName)
+                                                            .withStyle(TextFormatting.GREEN),
+                                                    admin.getUUID());
+
+                                            targetPlayer.sendMessage(
+                                                    new StringTextComponent("Your permission to create tournaments has been revoked")
+                                                            .withStyle(TextFormatting.RED),
+                                                    targetPlayer.getUUID());
+
+                                            return 1;
+                                        })
+                                )
+                        )
 
         );
 
@@ -549,6 +764,64 @@ public class TournamentCommands {
             }
         } catch (Exception e) {
             Tournaments.LOGGER.error("Failed to store location data", e);
+        }
+    }
+
+    /**
+     * Format hours in a user-friendly way
+     */
+    private static String formatHours(double hours) {
+        if (hours == 24) {
+            return "24 hours (daily)";
+        } else if (hours == 168) {
+            return "168 hours (weekly)";
+        } else if (hours == 720) {
+            return "720 hours (monthly)";
+        } else if (hours < 1) {
+            return (int)(hours * 60) + " minutes";
+        } else if (hours == Math.floor(hours)) {
+            return (int)hours + " hours";
+        } else {
+            return String.format("%.1f hours", hours);
+        }
+    }
+
+    /**
+     * Format time until a future instant
+     */
+    private static String formatTimeUntil(java.time.Instant target) {
+        if (target == null) {
+            return "Never";
+        }
+
+        java.time.Instant now = java.time.Instant.now();
+        if (now.isAfter(target)) {
+            return "Now";
+        }
+
+        java.time.Duration duration = java.time.Duration.between(now, target);
+        long seconds = duration.getSeconds();
+
+        if (seconds < 60) {
+            return seconds + " seconds";
+        } else if (seconds < 3600) {
+            return (seconds / 60) + " minutes";
+        } else if (seconds < 86400) {
+            long hours = seconds / 3600;
+            long minutes = (seconds % 3600) / 60;
+            if (minutes == 0) {
+                return hours + " hours";
+            } else {
+                return hours + " hours, " + minutes + " minutes";
+            }
+        } else {
+            long days = seconds / 86400;
+            long hours = (seconds % 86400) / 3600;
+            if (hours == 0) {
+                return days + " days";
+            } else {
+                return days + " days, " + hours + " hours";
+            }
         }
     }
 }
