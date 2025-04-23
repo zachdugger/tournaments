@@ -19,6 +19,7 @@ import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.DoubleArgumentType;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
+import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import net.minecraft.command.CommandSource;
 import net.minecraft.command.Commands;
 import net.minecraft.entity.player.ServerPlayerEntity;
@@ -195,8 +196,13 @@ public class TournamentCommands {
                                 })
                         )
                         .then(Commands.literal("create")
-                                .requires(source -> RecurringTournamentHandler.canCreatePlayerTournament(source.getPlayerOrException()))
-                                .executes(context -> {
+                                .requires(source -> {
+                                    try {
+                                        return RecurringTournamentHandler.canCreatePlayerTournament(source.getPlayerOrException());
+                                    } catch (CommandSyntaxException e) {
+                                        return false;
+                                    }
+                                })                                .executes(context -> {
                                     ServerPlayerEntity player = context.getSource().getPlayerOrException();
                                     TournamentCreationGUI.openCreationGUI(player);
                                     return 1;
@@ -224,8 +230,13 @@ public class TournamentCommands {
                                 )
                         )
                         .then(Commands.literal("createrecurring")
-                                .requires(source -> RecurringTournamentHandler.canCreateRecurringTournament(source.getPlayerOrException()))
-                                .executes(context -> {
+                                .requires(source -> {
+                                    try {
+                                        return RecurringTournamentHandler.canCreateRecurringTournament(source.getPlayerOrException());
+                                    } catch (CommandSyntaxException e) {
+                                        return false;
+                                    }
+                                })                                .executes(context -> {
                                     ServerPlayerEntity player = context.getSource().getPlayerOrException();
                                     TournamentRecurringCreationGUI.openCreationGUI(player);
                                     return 1;
@@ -286,8 +297,13 @@ public class TournamentCommands {
                                 )
                         )
                         .then(Commands.literal("deleterecurring")
-                                .requires(source -> RecurringTournamentHandler.canCreateRecurringTournament(source.getPlayerOrException()))
-                                .then(Commands.argument("id", StringArgumentType.string())
+                                .requires(source -> {
+                                    try {
+                                        return RecurringTournamentHandler.canCreateRecurringTournament(source.getPlayerOrException());
+                                    } catch (CommandSyntaxException e) {
+                                        return false;
+                                    }
+                                })                                .then(Commands.argument("id", StringArgumentType.string())
                                         .executes(context -> {
                                             ServerPlayerEntity player = context.getSource().getPlayerOrException();
                                             String id = StringArgumentType.getString(context, "id");
