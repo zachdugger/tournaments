@@ -9,6 +9,8 @@ import com.blissy.tournaments.data.Tournament;
 import com.blissy.tournaments.data.TournamentMatch;
 import com.blissy.tournaments.data.TournamentParticipant;
 import com.blissy.tournaments.handlers.RecurringTournamentHandler;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.entity.player.PlayerInventory;
@@ -91,14 +93,17 @@ public class TournamentMainGUI {
      * Open the recurring tournaments GUI
      */
     public static void openRecurringTournamentsGui(ServerPlayerEntity player) {
-        JsonObject config = UIConfigLoader.getMainScreenConfig();
-        if (config.has("recurring_matches_screen")) {
-            config = config.getAsJsonObject("recurring_matches_screen");
-        }
-        String title = config.has("title") ? config.get("title").getAsString() : "Recurring Tournaments";
+        // Get initial config
+        JsonObject initialConfig = UIConfigLoader.getMainScreenConfig();
+        // Create a final variable for the modified config to use in lambda
+        final JsonObject configToUse = initialConfig.has("recurring_matches_screen")
+                ? initialConfig.getAsJsonObject("recurring_matches_screen")
+                : initialConfig;
+
+        String title = configToUse.has("title") ? configToUse.get("title").getAsString() : "Recurring Tournaments";
 
         ContainerFactory.openTournamentGui(player, title, (inventory, p) -> {
-            populateRecurringTournamentsGui(inventory, p);
+            populateRecurringTournamentsGui(inventory, configToUse, p);
         });
     }
 
@@ -106,20 +111,20 @@ public class TournamentMainGUI {
      * Open the player tournaments GUI
      */
     public static void openPlayerTournamentsGui(ServerPlayerEntity player) {
-        JsonObject config = UIConfigLoader.getMainScreenConfig();
-        if (config.has("player_matches_screen")) {
-            config = config.getAsJsonObject("player_matches_screen");
-        }
-        String title = config.has("title") ? config.get("title").getAsString() : "Player Tournaments";
+        // Get initial config
+        JsonObject initialConfig = UIConfigLoader.getMainScreenConfig();
+        // Create a final variable for the modified config to use in lambda
+        final JsonObject configToUse = initialConfig.has("player_matches_screen")
+                ? initialConfig.getAsJsonObject("player_matches_screen")
+                : initialConfig;
+
+        String title = configToUse.has("title") ? configToUse.get("title").getAsString() : "Player Tournaments";
 
         ContainerFactory.openTournamentGui(player, title, (inventory, p) -> {
-            populatePlayerTournamentsGui(inventory, p);
+            populatePlayerTournamentsGui(inventory, configToUse, p);
         });
     }
 
-    /**
-     * Populate the main tournament GUI
-     */
     private static void populateMainGui(Inventory inventory, ServerPlayerEntity player) {
         JsonObject config = UIConfigLoader.getMainScreenConfig();
         TournamentManager manager = TournamentManager.getInstance();
@@ -127,6 +132,48 @@ public class TournamentMainGUI {
 
         // First, apply the borders to the inventory
         UIConfigLoader.applyBorders(inventory, config);
+
+        // Add stats book in top left
+        ItemStack statsBook = new ItemStack(Items.ENCHANTED_BOOK);
+        statsBook.setHoverName(new StringTextComponent("Tournament Stats")
+                .withStyle(TextFormatting.GOLD));
+
+        // Set the author and title
+        CompoundNBT bookTag = statsBook.getOrCreateTag();
+        bookTag.putString("author", player.getName().getString());
+        bookTag.putString("title", "Tournament Stats");
+        bookTag.putBoolean("resolved", true);
+
+        // Use getOrCreatePlayer to ensure we have an EloPlayer even for players without stats
+        EloPlayer playerElo = Tournaments.ELO_MANAGER.getOrCreatePlayer(player.getUUID());
+
+        // Add lore with player stats
+        List<ITextComponent> statsLore = new ArrayList<>();
+
+        statsLore.add(new StringTextComponent("ELO Rating: " + playerElo.getElo())
+                .withStyle(TextFormatting.GOLD));
+
+        statsLore.add(new StringTextComponent("Wins: " + playerElo.getWins())
+                .withStyle(TextFormatting.GREEN));
+
+        statsLore.add(new StringTextComponent("Losses: " + playerElo.getLosses())
+                .withStyle(TextFormatting.RED));
+
+        // Calculate win rate
+        int totalGames = playerElo.getWins() + playerElo.getLosses();
+        if (totalGames > 0) {
+            float winRate = (float)playerElo.getWins() * 100f / totalGames;
+            statsLore.add(new StringTextComponent("Win Rate: " + String.format("%.1f%%", winRate))
+                    .withStyle(TextFormatting.AQUA));
+        } else {
+            statsLore.add(new StringTextComponent("Win Rate: 0.0%")
+                    .withStyle(TextFormatting.AQUA));
+        }
+
+        TournamentGuiHandler.setItemLore(statsBook, statsLore);
+
+        // Add to stats book slot (top left)
+        inventory.setItem(UIConfigLoader.getSlot(config, "stats_book_slot"), statsBook);
 
         // Add action buttons based on player status
         if (playerTournament == null) {
@@ -198,101 +245,150 @@ public class TournamentMainGUI {
             inventory.setItem(7, reloadButton);
         }
 
-        // Populate leaderboard slots with player heads
+        // Populate leaderboard slots with player heads (slots 10-16)
         List<EloPlayer> topPlayers = Tournaments.ELO_MANAGER.getTopPlayers(7);
 
         for (int i = 0; i < topPlayers.size() && i < 7; i++) {
-            EloPlayer eloPlayer = topPlayers.get(i);
-            int slotKey = i + 1;
-            int slot = UIConfigLoader.getSlot(config, "leaderboard_" + slotKey);
+            // Using "topPlayerElo" to avoid naming conflict with "playerElo"
+            EloPlayer topPlayerElo = topPlayers.get(i);
+            int slot = 10 + i; // Use slots 10-16 directly
 
-            if (slot > 0) {
-                ItemStack playerHead = new ItemStack(Items.PLAYER_HEAD);
+            ItemStack playerHead = new ItemStack(Items.PLAYER_HEAD);
 
-                CompoundNBT tag = playerHead.getOrCreateTag();
-                tag.putString("SkullOwner", eloPlayer.getPlayerName());
+            CompoundNBT tag = playerHead.getOrCreateTag();
+            tag.putString("SkullOwner", topPlayerElo.getPlayerName());
 
-                playerHead.setHoverName(
-                        new StringTextComponent("#" + (i + 1) + " " + eloPlayer.getPlayerName() + " (" + eloPlayer.getElo() + " ELO)")
-                                .withStyle(TextFormatting.GOLD)
-                );
+            playerHead.setHoverName(
+                    new StringTextComponent("#" + (i + 1) + " " + topPlayerElo.getPlayerName() + " (" + topPlayerElo.getElo() + " ELO)")
+                            .withStyle(TextFormatting.GOLD)
+            );
 
-                List<ITextComponent> lore = new ArrayList<>();
-                lore.add(new StringTextComponent("Wins: " + eloPlayer.getWins())
-                        .withStyle(TextFormatting.GREEN));
-                lore.add(new StringTextComponent("Losses: " + eloPlayer.getLosses())
-                        .withStyle(TextFormatting.RED));
+            List<ITextComponent> lore = new ArrayList<>();
+            lore.add(new StringTextComponent("Wins: " + topPlayerElo.getWins())
+                    .withStyle(TextFormatting.GREEN));
+            lore.add(new StringTextComponent("Losses: " + topPlayerElo.getLosses())
+                    .withStyle(TextFormatting.RED));
 
-                // Calculate win rate
-                int totalGames = eloPlayer.getWins() + eloPlayer.getLosses();
-                if (totalGames > 0) {
-                    float winRate = (float) eloPlayer.getWins() * 100f / totalGames;
-                    lore.add(new StringTextComponent(String.format("Win Rate: %.1f%%", winRate))
-                            .withStyle(TextFormatting.AQUA));
-                }
-
-                TournamentGuiHandler.setItemLore(playerHead, lore);
-                inventory.setItem(slot, playerHead);
+            // Calculate win rate
+            int playerTotalGames = topPlayerElo.getWins() + topPlayerElo.getLosses();
+            if (playerTotalGames > 0) {
+                float winRate = (float) topPlayerElo.getWins() * 100f / playerTotalGames;
+                lore.add(new StringTextComponent(String.format("Win Rate: %.1f%%", winRate))
+                        .withStyle(TextFormatting.AQUA));
             }
+
+            TournamentGuiHandler.setItemLore(playerHead, lore);
+            inventory.setItem(slot, playerHead);
         }
-
-        // Add player stats book
-        ItemStack statsBook = new ItemStack(Items.WRITTEN_BOOK);
-        statsBook.setHoverName(new StringTextComponent("Your Tournament Stats")
-                .withStyle(TextFormatting.GOLD));
-
-        // Set the author and title
-        CompoundNBT bookTag = statsBook.getOrCreateTag();
-        bookTag.putString("author", player.getName().getString());
-        bookTag.putString("title", "Tournament Stats");
-        bookTag.putBoolean("resolved", true);
-
-        ListNBT pages = new ListNBT();
-
-        // Use getOrCreatePlayer to ensure we have an EloPlayer even for players without stats
-        EloPlayer eloPlayer = Tournaments.ELO_MANAGER.getOrCreatePlayer(player.getUUID());
-
-        // Build the text content using string concatenation
-        String statsText = new StringTextComponent("ELO Rating: " + eloPlayer.getElo())
-                .withStyle(TextFormatting.GOLD).getString() + "\n\n";
-
-        statsText += new StringTextComponent("Wins: " + eloPlayer.getWins())
-                .withStyle(TextFormatting.GREEN).getString() + "\n\n";
-
-        statsText += new StringTextComponent("Losses: " + eloPlayer.getLosses())
-                .withStyle(TextFormatting.RED).getString() + "\n\n";
-
-        // Calculate win rate
-        int totalGames = eloPlayer.getWins() + eloPlayer.getLosses();
-        if (totalGames > 0) {
-            float winRate = (float)eloPlayer.getWins() * 100f / totalGames;
-            statsText += new StringTextComponent("Win Rate: " + String.format("%.1f%%", winRate))
-                    .withStyle(TextFormatting.AQUA).getString();
-        } else {
-            statsText += new StringTextComponent("Win Rate: 0.0%")
-                    .withStyle(TextFormatting.AQUA).getString();
-        }
-
-        ITextComponent page = new StringTextComponent(statsText);
-        pages.add(StringNBT.valueOf(ITextComponent.Serializer.toJson(page)));
-        bookTag.put("pages", pages);
-
-        // Add GuiAction
-        bookTag.putString("GuiAction", "openStatsBook");
-
-        inventory.setItem(
-                UIConfigLoader.getSlot(config, "stats_book_slot"),
-                statsBook
-        );
 
         // Add section labels and "Show All" buttons
         addSectionLabels(inventory, config, player);
 
-        // Populate recurring tournaments
+        // Populate recurring tournaments - passing config parameter
         populateRecurringTournamentSlots(inventory, config, player);
 
-        // Populate player tournaments
+        // Populate player tournaments - passing config parameter
         populatePlayerTournamentSlots(inventory, config, player);
+
+        // Add in-progress tournament displays
+        addInProgressDisplays(inventory, config);
+    }
+
+    /**
+     * Add in-progress tournament displays in specified slots
+     */
+    private static void addInProgressDisplays(Inventory inventory, JsonObject config) {
+        // Get all active tournaments
+        List<Tournament> inProgressTournaments = new ArrayList<>();
+
+        for (Tournament tournament : TournamentManager.getInstance().getAllTournaments().values()) {
+            if (tournament.getStatus() == Tournament.TournamentStatus.IN_PROGRESS) {
+                inProgressTournaments.add(tournament);
+            }
+        }
+
+        if (inProgressTournaments.isEmpty()) {
+            return;
+        }
+
+        // Get recurring in-progress display slots
+        List<Integer> recurringSlots = new ArrayList<>();
+        if (config.has("slots") && config.getAsJsonObject("slots").has("recurring_in_progress_slots")) {
+            JsonArray slotsArray = config.getAsJsonObject("slots").getAsJsonArray("recurring_in_progress_slots");
+            for (JsonElement element : slotsArray) {
+                recurringSlots.add(element.getAsInt());
+            }
+        } else {
+            // Default slots
+            recurringSlots.add(18);
+            recurringSlots.add(27);
+            recurringSlots.add(36);
+        }
+
+        // Get player in-progress display slots
+        List<Integer> playerSlots = new ArrayList<>();
+        if (config.has("slots") && config.getAsJsonObject("slots").has("player_in_progress_slots")) {
+            JsonArray slotsArray = config.getAsJsonObject("slots").getAsJsonArray("player_in_progress_slots");
+            for (JsonElement element : slotsArray) {
+                playerSlots.add(element.getAsInt());
+            }
+        } else {
+            // Default slots
+            playerSlots.add(26);
+            playerSlots.add(35);
+            playerSlots.add(44);
+        }
+
+        // Split tournaments into recurring and player tournaments
+        List<Tournament> recurringTournaments = new ArrayList<>();
+        List<Tournament> playerTournaments = new ArrayList<>();
+
+        for (Tournament tournament : inProgressTournaments) {
+            CompoundNBT extraSettings = TournamentManager.getInstance().getTournamentExtraSettings(tournament.getName());
+            boolean isRecurring = extraSettings.contains("isRecurring") && extraSettings.getBoolean("isRecurring");
+
+            if (isRecurring) {
+                recurringTournaments.add(tournament);
+            } else {
+                playerTournaments.add(tournament);
+            }
+        }
+
+        // Add recurring in-progress tournaments to display slots
+        for (int i = 0; i < Math.min(recurringTournaments.size(), recurringSlots.size()); i++) {
+            Tournament tournament = recurringTournaments.get(i);
+            int slot = recurringSlots.get(i);
+
+            ItemStack displayItem = new ItemStack(Items.BOOK);
+            displayItem.setHoverName(new StringTextComponent("Active: " + tournament.getName())
+                    .withStyle(TextFormatting.GOLD));
+
+            List<ITextComponent> lore = new ArrayList<>();
+            lore.add(new StringTextComponent("Players: " + tournament.getParticipantCount() +
+                    "/" + tournament.getMaxParticipants())
+                    .withStyle(TextFormatting.GRAY));
+
+            TournamentGuiHandler.setItemLore(displayItem, lore);
+            inventory.setItem(slot, displayItem);
+        }
+
+        // Add player in-progress tournaments to display slots
+        for (int i = 0; i < Math.min(playerTournaments.size(), playerSlots.size()); i++) {
+            Tournament tournament = playerTournaments.get(i);
+            int slot = playerSlots.get(i);
+
+            ItemStack displayItem = new ItemStack(Items.BOOK);
+            displayItem.setHoverName(new StringTextComponent("Active: " + tournament.getName())
+                    .withStyle(TextFormatting.AQUA));
+
+            List<ITextComponent> lore = new ArrayList<>();
+            lore.add(new StringTextComponent("Players: " + tournament.getParticipantCount() +
+                    "/" + tournament.getMaxParticipants())
+                    .withStyle(TextFormatting.GRAY));
+
+            TournamentGuiHandler.setItemLore(displayItem, lore);
+            inventory.setItem(slot, displayItem);
+        }
     }
 
     /**
@@ -315,27 +411,48 @@ public class TournamentMainGUI {
 
         inventory.setItem(UIConfigLoader.getSlot(config, "player_label_slot"), playerLabel);
 
-        // Add recurring show all button
-        UIConfigLoader.ItemConfig recurringShowAllConfig = UIConfigLoader.getItemConfig(config, "recurring_show_all");
-        ItemStack recurringShowAll = new ItemStack(recurringShowAllConfig.getItem());
-        recurringShowAll.setHoverName(new StringTextComponent(recurringShowAllConfig.getName())
-                .withStyle(recurringShowAllConfig.getColor()));
+        // Get recurring tournaments count
+        int recurringCount = 0;
+        for (RecurringTournament tournament : RecurringTournament.getAllRecurringTournaments()) {
+            recurringCount++;
+        }
 
-        CompoundNBT recurringShowAllTag = recurringShowAll.getOrCreateTag();
-        recurringShowAllTag.putString("GuiAction", recurringShowAllConfig.getAction());
+        // Get player tournaments count
+        int playerTournamentCount = 0;
+        for (Tournament tournament : TournamentManager.getInstance().getAllTournaments().values()) {
+            CompoundNBT extraSettings = TournamentManager.getInstance().getTournamentExtraSettings(tournament.getName());
+            boolean isRecurring = extraSettings.contains("isRecurring") && extraSettings.getBoolean("isRecurring");
 
-        inventory.setItem(UIConfigLoader.getSlot(config, "recurring_show_all_slot"), recurringShowAll);
+            if (!isRecurring) {
+                playerTournamentCount++;
+            }
+        }
 
-        // Add player show all button
-        UIConfigLoader.ItemConfig playerShowAllConfig = UIConfigLoader.getItemConfig(config, "player_show_all");
-        ItemStack playerShowAll = new ItemStack(playerShowAllConfig.getItem());
-        playerShowAll.setHoverName(new StringTextComponent(playerShowAllConfig.getName())
-                .withStyle(playerShowAllConfig.getColor()));
+        // Add recurring show all button if more than 5
+        if (recurringCount > 5) {
+            UIConfigLoader.ItemConfig recurringShowAllConfig = UIConfigLoader.getItemConfig(config, "recurring_show_all");
+            ItemStack recurringShowAll = new ItemStack(recurringShowAllConfig.getItem());
+            recurringShowAll.setHoverName(new StringTextComponent(recurringShowAllConfig.getName())
+                    .withStyle(recurringShowAllConfig.getColor()));
 
-        CompoundNBT playerShowAllTag = playerShowAll.getOrCreateTag();
-        playerShowAllTag.putString("GuiAction", playerShowAllConfig.getAction());
+            CompoundNBT recurringShowAllTag = recurringShowAll.getOrCreateTag();
+            recurringShowAllTag.putString("GuiAction", recurringShowAllConfig.getAction());
 
-        inventory.setItem(UIConfigLoader.getSlot(config, "player_show_all_slot"), playerShowAll);
+            inventory.setItem(UIConfigLoader.getSlot(config, "recurring_show_all_slot"), recurringShowAll);
+        }
+
+        // Add player show all button if more than 5
+        if (playerTournamentCount > 5) {
+            UIConfigLoader.ItemConfig playerShowAllConfig = UIConfigLoader.getItemConfig(config, "player_show_all");
+            ItemStack playerShowAll = new ItemStack(playerShowAllConfig.getItem());
+            playerShowAll.setHoverName(new StringTextComponent(playerShowAllConfig.getName())
+                    .withStyle(playerShowAllConfig.getColor()));
+
+            CompoundNBT playerShowAllTag = playerShowAll.getOrCreateTag();
+            playerShowAllTag.putString("GuiAction", playerShowAllConfig.getAction());
+
+            inventory.setItem(UIConfigLoader.getSlot(config, "player_show_all_slot"), playerShowAll);
+        }
     }
 
     /**
@@ -566,12 +683,7 @@ public class TournamentMainGUI {
     /**
      * Populate recurring tournaments GUI (show all view)
      */
-    private static void populateRecurringTournamentsGui(Inventory inventory, ServerPlayerEntity player) {
-        JsonObject config = UIConfigLoader.getMainScreenConfig();
-        if (config.has("recurring_matches_screen")) {
-            config = config.getAsJsonObject("recurring_matches_screen");
-        }
-
+    private static void populateRecurringTournamentsGui(Inventory inventory, JsonObject config, ServerPlayerEntity player) {
         // Apply borders first
         UIConfigLoader.applyBorders(inventory, config);
 
@@ -659,15 +771,11 @@ public class TournamentMainGUI {
         }
     }
 
+
     /**
      * Populate player tournaments GUI (show all view)
      */
-    private static void populatePlayerTournamentsGui(Inventory inventory, ServerPlayerEntity player) {
-        JsonObject config = UIConfigLoader.getMainScreenConfig();
-        if (config.has("player_matches_screen")) {
-            config = config.getAsJsonObject("player_matches_screen");
-        }
-
+    private static void populatePlayerTournamentsGui(Inventory inventory, JsonObject config, ServerPlayerEntity player) {
         // Apply borders first
         UIConfigLoader.applyBorders(inventory, config);
 
@@ -1028,6 +1136,35 @@ public class TournamentMainGUI {
                 }
             }
 
+            // New action for opening recurring tournament creation
+            if ("openRecurringCreation".equals(action)) {
+                if (RecurringTournamentHandler.canCreateRecurringTournament(player)) {
+                    TournamentRecurringCreationGUI.openCreationGUI(player);
+                } else {
+                    player.sendMessage(
+                            new StringTextComponent("You don't have permission to create recurring tournaments")
+                                    .withStyle(TextFormatting.RED),
+                            player.getUUID());
+                    TournamentCreationGUI.openCreationGUI(player);
+                }
+                return;
+            }
+
+            // Add handling for createRecurringTournament action
+            if ("createRecurringTournament".equals(action)) {
+                if (RecurringTournamentHandler.canCreateRecurringTournament(player)) {
+                    // Create the recurring tournament
+                    TournamentRecurringCreationGUI.createRecurringTournament(player);
+                } else {
+                    player.sendMessage(
+                            new StringTextComponent("You don't have permission to create recurring tournaments")
+                                    .withStyle(TextFormatting.RED),
+                            player.getUUID());
+                    openMainGui(player);
+                }
+                return;
+            }
+
             switch (action) {
                 case "join":
                     if (tournamentName != null) {
@@ -1192,6 +1329,31 @@ public class TournamentMainGUI {
                     }
                     break;
 
+                case "reloadconfig":
+                    if (player.hasPermissions(2)) {
+                        try {
+                            // Reload the config
+                            UIConfigLoader.loadConfig(null);
+                            UIConfigLoader.saveConfig();
+
+                            player.sendMessage(
+                                    new StringTextComponent("Tournament UI configuration reloaded successfully")
+                                            .withStyle(TextFormatting.GREEN),
+                                    player.getUUID());
+
+                            Tournaments.LOGGER.info("UI config reloaded by {}", player.getName().getString());
+                        } catch (Exception e) {
+                            Tournaments.LOGGER.error("Failed to reload UI config", e);
+                            player.sendMessage(
+                                    new StringTextComponent("Error reloading UI configuration: " + e.getMessage())
+                                            .withStyle(TextFormatting.RED),
+                                    player.getUUID());
+                        }
+                        // Reopen main GUI
+                        openMainGui(player);
+                    }
+                    break;
+
                 default:
                     if ("none".equals(action)) {
                         // Just reopen the main GUI for "none" action
@@ -1231,7 +1393,6 @@ public class TournamentMainGUI {
         // For other actions, call the 5-param version (which now has recursion protection)
         processGuiAction(player, action, tournamentName, null, null);
     }
-
 
     /**
      * Format time in hours nicely (e.g., "2 hours" or "30 minutes")

@@ -197,6 +197,85 @@ public class TournamentGuiHandler {
                     TournamentCreationGUI.openCreationGUI(player);
                 }
                 return;
+            } else if (action.equals("createRecurringTournament")) {
+                // Create recurring tournament with specified values
+                player.closeContainer();
+
+                // Call the method to create a recurring tournament
+                TournamentRecurringCreationGUI.createRecurringTournament(player);
+                return;
+            } else if (action.equals("setRecurringId")) {
+                // Have player type recurring tournament ID in chat
+                player.closeContainer();
+                player.sendMessage(
+                        new StringTextComponent("Please type the recurring tournament ID in chat (type 'cancel' to cancel):")
+                                .withStyle(TextFormatting.RED),
+                        player.getUUID());
+                player.getPersistentData().putBoolean("WaitingForRecurringId", true);
+                return;
+            } else if (action.equals("setRecurringTemplateName")) {
+                // Have player type template name in chat
+                player.closeContainer();
+                player.sendMessage(
+                        new StringTextComponent("Please type the tournament template name in chat (type 'cancel' to cancel):")
+                                .withStyle(TextFormatting.YELLOW),
+                        player.getUUID());
+                player.getPersistentData().putBoolean("WaitingForRecurringTemplateName", true);
+                return;
+            } else if (action.equals("setRecurringMinLevel")) {
+                // Have player type min level in chat
+                player.closeContainer();
+                player.sendMessage(
+                        new StringTextComponent("Please type the minimum Pokémon level (1-100) in chat (type 'cancel' to cancel):")
+                                .withStyle(TextFormatting.AQUA),
+                        player.getUUID());
+                player.getPersistentData().putBoolean("WaitingForRecurringMinLevel", true);
+                return;
+            } else if (action.equals("setRecurringMaxLevel")) {
+                // Have player type max level in chat
+                player.closeContainer();
+                player.sendMessage(
+                        new StringTextComponent("Please type the maximum Pokémon level (1-100) in chat (type 'cancel' to cancel):")
+                                .withStyle(TextFormatting.BLUE),
+                        player.getUUID());
+                player.getPersistentData().putBoolean("WaitingForRecurringMaxLevel", true);
+                return;
+            } else if (action.equals("setRecurringMaxParticipants")) {
+                // Have player type max participants in chat
+                player.closeContainer();
+                player.sendMessage(
+                        new StringTextComponent("Please type the tournament size (4-64) in chat (type 'cancel' to cancel):")
+                                .withStyle(TextFormatting.GREEN),
+                        player.getUUID());
+                player.getPersistentData().putBoolean("WaitingForRecurringMaxParticipants", true);
+                return;
+            } else if (action.equals("setRecurringFormat")) {
+                // Have player type format in chat
+                player.closeContainer();
+                player.sendMessage(
+                        new StringTextComponent("Please type the tournament format (SINGLE_ELIMINATION, DOUBLE_ELIMINATION, ROUND_ROBIN) in chat (type 'cancel' to cancel):")
+                                .withStyle(TextFormatting.LIGHT_PURPLE),
+                        player.getUUID());
+                player.getPersistentData().putBoolean("WaitingForRecurringFormat", true);
+                return;
+            } else if (action.equals("setRecurringEntryFee")) {
+                // Have player type entry fee in chat
+                player.closeContainer();
+                player.sendMessage(
+                        new StringTextComponent("Please type the entry fee amount in chat (type '0' for no fee, or 'cancel' to cancel):")
+                                .withStyle(TextFormatting.GOLD),
+                        player.getUUID());
+                player.getPersistentData().putBoolean("WaitingForRecurringEntryFee", true);
+                return;
+            } else if (action.equals("setRecurringInterval")) {
+                // Have player type recurrence interval in chat
+                player.closeContainer();
+                player.sendMessage(
+                        new StringTextComponent("Please enter the recurrence interval in hours (e.g., 24 for daily, 168 for weekly):")
+                                .withStyle(TextFormatting.RED),
+                        player.getUUID());
+                player.getPersistentData().putBoolean("WaitingForRecurringInterval", true);
+                return;
             }
 
             // Process other actions through the main GUI handler
@@ -274,6 +353,21 @@ public class TournamentGuiHandler {
                                     .withStyle(TextFormatting.RED),
                             player.getUUID());
                     TournamentCreationGUI.openCreationGUI(player);
+                }
+                return;
+            }
+
+            // Add handling for createRecurringTournament action
+            if ("createRecurringTournament".equals(action)) {
+                if (RecurringTournamentHandler.canCreateRecurringTournament(player)) {
+                    // Create the recurring tournament
+                    TournamentRecurringCreationGUI.createRecurringTournament(player);
+                } else {
+                    player.sendMessage(
+                            new StringTextComponent("You don't have permission to create recurring tournaments")
+                                    .withStyle(TextFormatting.RED),
+                            player.getUUID());
+                    TournamentMainGUI.openMainGui(player);
                 }
                 return;
             }
@@ -506,6 +600,7 @@ public class TournamentGuiHandler {
         // For other actions, call the 5-param version (which now has recursion protection)
         processGuiAction(player, action, tournamentName, null, null);
     }
+
 
     /**
      * Format time in hours nicely (e.g., "2 hours" or "30 minutes")
