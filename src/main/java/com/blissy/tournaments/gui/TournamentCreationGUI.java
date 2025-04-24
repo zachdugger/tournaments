@@ -4,6 +4,7 @@ import com.blissy.tournaments.TournamentManager;
 import com.blissy.tournaments.Tournaments;
 import com.blissy.tournaments.config.UIConfigLoader;
 import com.blissy.tournaments.data.Tournament;
+import com.blissy.tournaments.handlers.RecurringTournamentHandler;
 import com.google.gson.JsonObject;
 import net.minecraft.entity.player.ServerPlayerEntity;
 import net.minecraft.inventory.Inventory;
@@ -35,7 +36,10 @@ public class TournamentCreationGUI {
      */
     public static void openCreationGUI(ServerPlayerEntity player) {
         // Check if player has permission
-        if (!player.hasPermissions(2)) {
+        boolean isAdmin = player.hasPermissions(2);
+        boolean canCreate = RecurringTournamentHandler.canCreatePlayerTournament(player);
+
+        if (!canCreate) {
             player.sendMessage(
                     new StringTextComponent("You don't have permission to create tournaments")
                             .withStyle(TextFormatting.RED),
@@ -49,14 +53,14 @@ public class TournamentCreationGUI {
 
         // Use container factory to create GUI
         ContainerFactory.openTournamentGui(player, title, (inventory, p) -> {
-            populateCreationGUI(inventory, p);
+            populateCreationGUI(inventory, p, isAdmin);
         });
     }
 
     /**
      * Populate the creation GUI
      */
-    private static void populateCreationGUI(Inventory inventory, ServerPlayerEntity player) {
+    private static void populateCreationGUI(Inventory inventory, ServerPlayerEntity player, boolean isAdmin) {
         JsonObject config = UIConfigLoader.getCreationScreenConfig();
 
         // Apply borders first
@@ -84,20 +88,25 @@ public class TournamentCreationGUI {
         nameTag.putString("GuiAction", "setName");
         inventory.setItem(20, nameItem);
 
-        // Add tournament size field
-        ItemStack sizeItem = new ItemStack(Items.PLAYER_HEAD);
-        sizeItem.setHoverName(new StringTextComponent("Tournament Size")
-                .withStyle(TextFormatting.GREEN));
-        List<ITextComponent> sizeLore = new ArrayList<>();
-        sizeLore.add(new StringTextComponent("Click to set tournament size")
-                .withStyle(TextFormatting.GRAY));
-        sizeLore.add(new StringTextComponent("Default: " + DEFAULT_MAX_PARTICIPANTS + " players")
-                .withStyle(TextFormatting.GRAY));
-        TournamentGuiHandler.setItemLore(sizeItem, sizeLore);
+        // For normal players, only show essential settings
+        // For admins, show all settings
 
-        CompoundNBT sizeTag = sizeItem.getOrCreateTag();
-        sizeTag.putString("GuiAction", "setMaxParticipants");
-        inventory.setItem(22, sizeItem);
+        // Add tournament size field - only for admins
+        if (isAdmin) {
+            ItemStack sizeItem = new ItemStack(Items.PLAYER_HEAD);
+            sizeItem.setHoverName(new StringTextComponent("Tournament Size")
+                    .withStyle(TextFormatting.GREEN));
+            List<ITextComponent> sizeLore = new ArrayList<>();
+            sizeLore.add(new StringTextComponent("Click to set tournament size")
+                    .withStyle(TextFormatting.GRAY));
+            sizeLore.add(new StringTextComponent("Default: " + DEFAULT_MAX_PARTICIPANTS + " players")
+                    .withStyle(TextFormatting.GRAY));
+            TournamentGuiHandler.setItemLore(sizeItem, sizeLore);
+
+            CompoundNBT sizeTag = sizeItem.getOrCreateTag();
+            sizeTag.putString("GuiAction", "setMaxParticipants");
+            inventory.setItem(22, sizeItem);
+        }
 
         // Add min level field
         ItemStack minLevelItem = new ItemStack(Items.IRON_SWORD);
@@ -112,7 +121,7 @@ public class TournamentCreationGUI {
 
         CompoundNBT minLevelTag = minLevelItem.getOrCreateTag();
         minLevelTag.putString("GuiAction", "setMinLevel");
-        inventory.setItem(24, minLevelItem);
+        inventory.setItem(isAdmin ? 24 : 22, minLevelItem);
 
         // Add max level field
         ItemStack maxLevelItem = new ItemStack(Items.DIAMOND_SWORD);
@@ -127,22 +136,24 @@ public class TournamentCreationGUI {
 
         CompoundNBT maxLevelTag = maxLevelItem.getOrCreateTag();
         maxLevelTag.putString("GuiAction", "setMaxLevel");
-        inventory.setItem(31, maxLevelItem);
+        inventory.setItem(isAdmin ? 31 : 24, maxLevelItem);
 
-        // Add format field
-        ItemStack formatItem = new ItemStack(Items.BOOKSHELF);
-        formatItem.setHoverName(new StringTextComponent("Tournament Format")
-                .withStyle(TextFormatting.LIGHT_PURPLE));
-        List<ITextComponent> formatLore = new ArrayList<>();
-        formatLore.add(new StringTextComponent("Click to set format")
-                .withStyle(TextFormatting.GRAY));
-        formatLore.add(new StringTextComponent("Default: " + DEFAULT_FORMAT)
-                .withStyle(TextFormatting.GRAY));
-        TournamentGuiHandler.setItemLore(formatItem, formatLore);
+        // Add format field - only for admins
+        if (isAdmin) {
+            ItemStack formatItem = new ItemStack(Items.BOOKSHELF);
+            formatItem.setHoverName(new StringTextComponent("Tournament Format")
+                    .withStyle(TextFormatting.LIGHT_PURPLE));
+            List<ITextComponent> formatLore = new ArrayList<>();
+            formatLore.add(new StringTextComponent("Click to set format")
+                    .withStyle(TextFormatting.GRAY));
+            formatLore.add(new StringTextComponent("Default: " + DEFAULT_FORMAT)
+                    .withStyle(TextFormatting.GRAY));
+            TournamentGuiHandler.setItemLore(formatItem, formatLore);
 
-        CompoundNBT formatTag = formatItem.getOrCreateTag();
-        formatTag.putString("GuiAction", "setFormat");
-        inventory.setItem(33, formatItem);
+            CompoundNBT formatTag = formatItem.getOrCreateTag();
+            formatTag.putString("GuiAction", "setFormat");
+            inventory.setItem(33, formatItem);
+        }
 
         // Add entry fee field
         ItemStack feeItem = new ItemStack(Items.GOLD_INGOT);
@@ -157,7 +168,7 @@ public class TournamentCreationGUI {
 
         CompoundNBT feeTag = feeItem.getOrCreateTag();
         feeTag.putString("GuiAction", "setEntryFee");
-        inventory.setItem(40, feeItem);
+        inventory.setItem(isAdmin ? 40 : 31, feeItem);
 
         // Add start delay field
         ItemStack delayItem = new ItemStack(Items.CLOCK);
@@ -174,7 +185,24 @@ public class TournamentCreationGUI {
 
         CompoundNBT delayTag = delayItem.getOrCreateTag();
         delayTag.putString("GuiAction", "setStartDelay");
-        inventory.setItem(42, delayItem);
+        inventory.setItem(isAdmin ? 42 : 33, delayItem);
+
+        // Add recurring option - only for admins
+        if (isAdmin) {
+            ItemStack recurringItem = new ItemStack(Items.DIAMOND_BLOCK);
+            recurringItem.setHoverName(new StringTextComponent("Make Recurring Tournament")
+                    .withStyle(TextFormatting.RED));
+            List<ITextComponent> recurringLore = new ArrayList<>();
+            recurringLore.add(new StringTextComponent("Click to create a recurring tournament instead")
+                    .withStyle(TextFormatting.GRAY));
+            recurringLore.add(new StringTextComponent("This will open the recurring tournament creation GUI")
+                    .withStyle(TextFormatting.GRAY));
+            TournamentGuiHandler.setItemLore(recurringItem, recurringLore);
+
+            CompoundNBT recurringTag = recurringItem.getOrCreateTag();
+            recurringTag.putString("GuiAction", "openRecurringCreation");
+            inventory.setItem(44, recurringItem);
+        }
 
         // Add create button
         ItemStack createItem = new ItemStack(Items.EMERALD);
@@ -215,11 +243,15 @@ public class TournamentCreationGUI {
         settingsLore.add(new StringTextComponent("Max Level: " + (maxLevelStr != null ? maxLevelStr : DEFAULT_MAX_LEVEL))
                 .withStyle(TextFormatting.BLUE));
 
-        settingsLore.add(new StringTextComponent("Size: " + (maxParticipantsStr != null ? maxParticipantsStr : DEFAULT_MAX_PARTICIPANTS) + " players")
-                .withStyle(TextFormatting.GREEN));
+        if (isAdmin || maxParticipantsStr != null) {
+            settingsLore.add(new StringTextComponent("Size: " + (maxParticipantsStr != null ? maxParticipantsStr : DEFAULT_MAX_PARTICIPANTS) + " players")
+                    .withStyle(TextFormatting.GREEN));
+        }
 
-        settingsLore.add(new StringTextComponent("Format: " + (format != null ? format : DEFAULT_FORMAT))
-                .withStyle(TextFormatting.LIGHT_PURPLE));
+        if (isAdmin || format != null) {
+            settingsLore.add(new StringTextComponent("Format: " + (format != null ? format : DEFAULT_FORMAT))
+                    .withStyle(TextFormatting.LIGHT_PURPLE));
+        }
 
         settingsLore.add(new StringTextComponent("Entry Fee: " + (entryFeeStr != null ? entryFeeStr : DEFAULT_ENTRY_FEE))
                 .withStyle(TextFormatting.GOLD));

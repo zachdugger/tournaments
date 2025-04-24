@@ -202,7 +202,8 @@ public class TournamentCommands {
                                     } catch (CommandSyntaxException e) {
                                         return false;
                                     }
-                                })                                .executes(context -> {
+                                })
+                                .executes(context -> {
                                     ServerPlayerEntity player = context.getSource().getPlayerOrException();
                                     TournamentCreationGUI.openCreationGUI(player);
                                     return 1;
@@ -236,7 +237,8 @@ public class TournamentCommands {
                                     } catch (CommandSyntaxException e) {
                                         return false;
                                     }
-                                })                                .executes(context -> {
+                                })
+                                .executes(context -> {
                                     ServerPlayerEntity player = context.getSource().getPlayerOrException();
                                     TournamentRecurringCreationGUI.openCreationGUI(player);
                                     return 1;
@@ -303,7 +305,8 @@ public class TournamentCommands {
                                     } catch (CommandSyntaxException e) {
                                         return false;
                                     }
-                                })                                .then(Commands.argument("id", StringArgumentType.string())
+                                })
+                                .then(Commands.argument("id", StringArgumentType.string())
                                         .executes(context -> {
                                             ServerPlayerEntity player = context.getSource().getPlayerOrException();
                                             String id = StringArgumentType.getString(context, "id");
@@ -652,7 +655,7 @@ public class TournamentCommands {
                                             ServerPlayerEntity admin = context.getSource().getPlayerOrException();
                                             String playerName = StringArgumentType.getString(context, "player");
 
-// Find the target player
+                                            // Find the target player
                                             ServerPlayerEntity targetPlayer = null;
                                             for (ServerPlayerEntity p : context.getSource().getServer().getPlayerList().getPlayers()) {
                                                 if (p.getName().getString().equalsIgnoreCase(playerName)) {
