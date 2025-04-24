@@ -187,22 +187,6 @@ public class TournamentCreationGUI {
         delayTag.putString("GuiAction", "setStartDelay");
         inventory.setItem(isAdmin ? 42 : 33, delayItem);
 
-        // Add recurring option - only for admins
-        if (isAdmin) {
-            ItemStack recurringItem = new ItemStack(Items.DIAMOND_BLOCK);
-            recurringItem.setHoverName(new StringTextComponent("Make Recurring Tournament")
-                    .withStyle(TextFormatting.RED));
-            List<ITextComponent> recurringLore = new ArrayList<>();
-            recurringLore.add(new StringTextComponent("Click to create a recurring tournament instead")
-                    .withStyle(TextFormatting.GRAY));
-            recurringLore.add(new StringTextComponent("This will open the recurring tournament creation GUI")
-                    .withStyle(TextFormatting.GRAY));
-            TournamentGuiHandler.setItemLore(recurringItem, recurringLore);
-
-            CompoundNBT recurringTag = recurringItem.getOrCreateTag();
-            recurringTag.putString("GuiAction", "openRecurringCreation");
-            inventory.setItem(44, recurringItem);
-        }
 
         // Add create button
         ItemStack createItem = new ItemStack(Items.EMERALD);
