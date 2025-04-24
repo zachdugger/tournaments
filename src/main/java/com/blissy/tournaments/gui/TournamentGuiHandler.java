@@ -1,6 +1,7 @@
 package com.blissy.tournaments.gui;
 
 import com.blissy.tournaments.Tournaments;
+import com.blissy.tournaments.handlers.RecurringTournamentHandler;
 import net.minecraft.entity.player.ServerPlayerEntity;
 import net.minecraft.inventory.container.Container;
 import net.minecraft.inventory.container.Slot;
@@ -84,7 +85,19 @@ public class TournamentGuiHandler {
             Tournaments.LOGGER.info("GUI CLICK DEBUG: Processing action '{}' for tournament '{}'",
                     action, tournamentName != null ? tournamentName : "none");
 
-            // First, handle specific creation GUI actions
+            // Special case for create action to bypass the recursion issues
+            if ("create".equals(action)) {
+                player.closeContainer();
+                Tournaments.LOGGER.info("GUI FLOW DEBUG: Direct handling of create action");
+
+                boolean canCreatePlayer = RecurringTournamentHandler.canCreatePlayerTournament(player);
+                if (canCreatePlayer) {
+                    TournamentCreationGUI.openCreationGUI(player);
+                    return;
+                }
+            }
+
+            // Handle creation-related GUI actions directly
             if (action.equals("setName")) {
                 // Have player type name in chat
                 player.closeContainer();
@@ -171,88 +184,7 @@ public class TournamentGuiHandler {
                 return;
             }
 
-            // Handle recurring tournament creation actions
-            else if (action.equals("setRecurringId")) {
-                // Have player type recurring ID in chat
-                player.closeContainer();
-                player.sendMessage(
-                        new StringTextComponent("Please type the recurring tournament ID in chat (type 'cancel' to cancel):")
-                                .withStyle(TextFormatting.RED),
-                        player.getUUID());
-                player.getPersistentData().putBoolean("WaitingForRecurringId", true);
-                return;
-            } else if (action.equals("setRecurringTemplateName")) {
-                // Have player type template name in chat
-                player.closeContainer();
-                player.sendMessage(
-                        new StringTextComponent("Please type the tournament template name in chat (type 'cancel' to cancel):")
-                                .withStyle(TextFormatting.YELLOW),
-                        player.getUUID());
-                player.getPersistentData().putBoolean("WaitingForRecurringTemplateName", true);
-                return;
-            } else if (action.equals("setRecurringMinLevel")) {
-                // Have player type recurring min level in chat
-                player.closeContainer();
-                player.sendMessage(
-                        new StringTextComponent("Please type the minimum Pokémon level (1-100) in chat (type 'cancel' to cancel):")
-                                .withStyle(TextFormatting.AQUA),
-                        player.getUUID());
-                player.getPersistentData().putBoolean("WaitingForRecurringMinLevel", true);
-                return;
-            } else if (action.equals("setRecurringMaxLevel")) {
-                // Have player type recurring max level in chat
-                player.closeContainer();
-                player.sendMessage(
-                        new StringTextComponent("Please type the maximum Pokémon level (1-100) in chat (type 'cancel' to cancel):")
-                                .withStyle(TextFormatting.BLUE),
-                        player.getUUID());
-                player.getPersistentData().putBoolean("WaitingForRecurringMaxLevel", true);
-                return;
-            } else if (action.equals("setRecurringMaxParticipants")) {
-                // Have player type recurring max participants in chat
-                player.closeContainer();
-                player.sendMessage(
-                        new StringTextComponent("Please type the tournament size (4-64) in chat (type 'cancel' to cancel):")
-                                .withStyle(TextFormatting.GREEN),
-                        player.getUUID());
-                player.getPersistentData().putBoolean("WaitingForRecurringMaxParticipants", true);
-                return;
-            } else if (action.equals("setRecurringFormat")) {
-                // Have player type recurring format in chat
-                player.closeContainer();
-                player.sendMessage(
-                        new StringTextComponent("Please type the tournament format (SINGLE_ELIMINATION, DOUBLE_ELIMINATION, ROUND_ROBIN) in chat (type 'cancel' to cancel):")
-                                .withStyle(TextFormatting.LIGHT_PURPLE),
-                        player.getUUID());
-                player.getPersistentData().putBoolean("WaitingForRecurringFormat", true);
-                return;
-            } else if (action.equals("setRecurringEntryFee")) {
-                // Have player type recurring entry fee in chat
-                player.closeContainer();
-                player.sendMessage(
-                        new StringTextComponent("Please type the entry fee amount in chat (type '0' for no fee, or 'cancel' to cancel):")
-                                .withStyle(TextFormatting.GOLD),
-                        player.getUUID());
-                player.getPersistentData().putBoolean("WaitingForRecurringEntryFee", true);
-                return;
-            } else if (action.equals("setRecurringInterval")) {
-                // Have player type recurring interval in chat
-                player.closeContainer();
-                player.sendMessage(
-                        new StringTextComponent("Please enter the recurrence interval in hours (e.g., 24 for daily, 168 for weekly, or 'cancel' to cancel):")
-                                .withStyle(TextFormatting.LIGHT_PURPLE),
-                        player.getUUID());
-                player.getPersistentData().putBoolean("WaitingForRecurringInterval", true);
-                return;
-            } else if (action.equals("createRecurringTournament")) {
-                // Create recurring tournament with specified values
-                player.closeContainer();
-                TournamentRecurringCreationGUI.createRecurringTournament(player);
-                return;
-            }
-
             // Process other actions through the main GUI handler
-            Tournaments.LOGGER.info("GUI CLICK DEBUG: Delegating to TournamentMainGUI.processGuiAction");
             if (recurringId != null) {
                 TournamentMainGUI.processGuiAction(player, action, tournamentName, recurringId, null);
             } else {

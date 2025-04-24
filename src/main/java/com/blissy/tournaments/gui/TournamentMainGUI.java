@@ -45,6 +45,7 @@ public class TournamentMainGUI {
 
     // Store a reference to containers for click detection
     private static final List<Integer> tournamentContainerIds = new ArrayList<>();
+    private static boolean processingAction = false;
 
     /**
      * Open the main tournament GUI for a player
@@ -972,58 +973,32 @@ public class TournamentMainGUI {
     }
 
     /**
-     * Process GUI actions
+     * Process GUI actions - with full parameters
      */
     public static void processGuiAction(ServerPlayerEntity player, String action, String tournamentName,
                                         String recurringId, ClickType clickType) {
-        // Process with the basic version if not using the extended one
-        if (recurringId == null && clickType == null) {
-            processGuiAction(player, action, tournamentName);
+        // Prevent recursion
+        if (processingAction) {
+            Tournaments.LOGGER.warn("Preventing recursive GUI action processing");
             return;
         }
 
-        TournamentManager manager = TournamentManager.getInstance();
+        processingAction = true;
 
-        // Close container first to prevent issues
-        player.closeContainer();
+        try {
+            TournamentManager manager = TournamentManager.getInstance();
 
-        Tournaments.LOGGER.info("GUI FLOW DEBUG: Processing action '{}'", action);
+            // Close container first to prevent issues
+            player.closeContainer();
 
-        switch (action) {
-            case "join":
-                if (tournamentName != null) {
-                    if (manager.joinTournament(tournamentName, player)) {
-                        player.sendMessage(
-                                new StringTextComponent("Successfully joined tournament: " + tournamentName)
-                                        .withStyle(TextFormatting.GREEN),
-                                player.getUUID());
-                    }
-                }
-                // Reopen main GUI after join action
-                openMainGui(player);
-                break;
+            Tournaments.LOGGER.info("GUI FLOW DEBUG: Processing action '{}'", action);
 
-            case "leave":
-                if (manager.leaveTournament(player)) {
-                    player.sendMessage(
-                            new StringTextComponent("Successfully left tournament")
-                                    .withStyle(TextFormatting.GREEN),
-                            player.getUUID());
-                } else {
-                    player.sendMessage(
-                            new StringTextComponent("You are not in a tournament")
-                                    .withStyle(TextFormatting.RED),
-                            player.getUUID());
-                }
-                // Reopen main GUI after leave action
-                openMainGui(player);
-                break;
-
-            case "create":
+            // Special handling for create action
+            if ("create".equals(action)) {
                 Tournaments.LOGGER.info("GUI FLOW DEBUG: Create tournament action detected");
                 // Check if we have permission for recurring tournaments
-                boolean canCreateRecurring = player.getItemInHand(net.minecraft.util.Hand.MAIN_HAND).getOrCreateTag()
-                        .getBoolean("CanCreateRecurring");
+                boolean canCreateRecurring = RecurringTournamentHandler.canCreateRecurringTournament(player);
+                boolean canCreatePlayer = RecurringTournamentHandler.canCreatePlayerTournament(player);
 
                 if (canCreateRecurring) {
                     // Ask if they want to create a regular or recurring tournament
@@ -1036,9 +1011,12 @@ public class TournamentMainGUI {
                             new StringTextComponent("Type '/tournament create' for a regular tournament or '/tournament createrecurring' for a recurring tournament")
                                     .withStyle(TextFormatting.YELLOW),
                             player.getUUID());
-                } else if (RecurringTournamentHandler.canCreatePlayerTournament(player)) {
+                    return;
+                } else if (canCreatePlayer) {
                     // Open regular tournament creation GUI
+                    Tournaments.LOGGER.info("GUI FLOW DEBUG: Opening TournamentCreationGUI");
                     TournamentCreationGUI.openCreationGUI(player);
+                    return;
                 } else {
                     player.sendMessage(
                             new StringTextComponent("You don't have permission to create tournaments")
@@ -1046,283 +1024,214 @@ public class TournamentMainGUI {
                             player.getUUID());
                     // Reopen main GUI
                     openMainGui(player);
+                    return;
                 }
-                break;
+            }
 
-            case "create_recurring":
-                if (RecurringTournamentHandler.canCreateRecurringTournament(player)) {
-                    // Open recurring tournament creation GUI
-                    TournamentRecurringCreationGUI.openCreationGUI(player);
-                } else {
-                    player.sendMessage(
-                            new StringTextComponent("You don't have permission to create recurring tournaments")
-                                    .withStyle(TextFormatting.RED),
-                            player.getUUID());
-                    // Reopen main GUI
-                    openMainGui(player);
-                }
-                break;
-
-            case "create_player":
-                if (RecurringTournamentHandler.canCreatePlayerTournament(player)) {
-                    // Open regular tournament creation GUI
-                    TournamentCreationGUI.openCreationGUI(player);
-                } else {
-                    player.sendMessage(
-                            new StringTextComponent("You don't have permission to create tournaments")
-                                    .withStyle(TextFormatting.RED),
-                            player.getUUID());
-                    // Reopen main GUI
-                    openMainGui(player);
-                }
-                break;
-
-            case "start":
-                Tournament playerTournament = manager.getPlayerTournament(player);
-                if (playerTournament != null &&
-                        player.getUUID().equals(playerTournament.getHostId()) &&
-                        playerTournament.getStatus() == Tournament.TournamentStatus.WAITING) {
-
-                    playerTournament.start();
-                    player.sendMessage(
-                            new StringTextComponent("Tournament started!")
-                                    .withStyle(TextFormatting.GREEN),
-                            player.getUUID());
-                } else {
-                    player.sendMessage(
-                            new StringTextComponent("You cannot start this tournament")
-                                    .withStyle(TextFormatting.RED),
-                            player.getUUID());
-                }
-                // Reopen main GUI after start action
-                openMainGui(player);
-                break;
-
-            case "matches":
-                if (tournamentName != null) {
-                    openMatchesGui(player, tournamentName);
-                    // Do NOT reopen main GUI here
-                } else {
-                    // If no tournament name provided, go back to main GUI
-                    openMainGui(player);
-                }
-                break;
-
-            case "view_recurring":
-                if (recurringId != null) {
-                    // Get the recurring tournament details
-                    RecurringTournament tournament = RecurringTournament.getRecurringTournament(recurringId);
-
-                    if (tournament != null) {
-                        // Display tournament details in chat
-                        player.sendMessage(
-                                new StringTextComponent("=== Recurring Tournament: " + tournament.getName() + " ===")
-                                        .withStyle(TextFormatting.GOLD),
-                                player.getUUID());
-
-                        player.sendMessage(
-                                new StringTextComponent("Template Name: " + tournament.getTemplateName())
-                                        .withStyle(TextFormatting.YELLOW),
-                                player.getUUID());
-
-                        player.sendMessage(
-                                new StringTextComponent("Level Range: " + tournament.getMinLevel() + "-" + tournament.getMaxLevel())
-                                        .withStyle(TextFormatting.AQUA),
-                                player.getUUID());
-
-                        player.sendMessage(
-                                new StringTextComponent("Format: " + tournament.getFormat())
-                                        .withStyle(TextFormatting.LIGHT_PURPLE),
-                                player.getUUID());
-
-                        player.sendMessage(
-                                new StringTextComponent("Recurrence: Every " + formatHours(tournament.getRecurrenceHours()))
-                                        .withStyle(TextFormatting.GREEN),
-                                player.getUUID());
-
-                        player.sendMessage(
-                                new StringTextComponent("Next Occurrence: " + formatTimeUntil(tournament.getNextScheduled()))
-                                        .withStyle(TextFormatting.GREEN),
-                                player.getUUID());
-
-                        // Check if right-clicked and has permission to delete
-                        if (clickType == ClickType.values()[1] && RecurringTournamentHandler.canCreateRecurringTournament(player)) {
+            switch (action) {
+                case "join":
+                    if (tournamentName != null) {
+                        if (manager.joinTournament(tournamentName, player)) {
                             player.sendMessage(
-                                    new StringTextComponent("To delete this recurring tournament, type: /tournament deleterecurring " + tournament.getName())
+                                    new StringTextComponent("Successfully joined tournament: " + tournamentName)
+                                            .withStyle(TextFormatting.GREEN),
+                                    player.getUUID());
+                        }
+                    }
+                    // Reopen main GUI after join action
+                    openMainGui(player);
+                    break;
+
+                case "leave":
+                    if (manager.leaveTournament(player)) {
+                        player.sendMessage(
+                                new StringTextComponent("Successfully left tournament")
+                                        .withStyle(TextFormatting.GREEN),
+                                player.getUUID());
+                    } else {
+                        player.sendMessage(
+                                new StringTextComponent("You are not in a tournament")
+                                        .withStyle(TextFormatting.RED),
+                                player.getUUID());
+                    }
+                    // Reopen main GUI after leave action
+                    openMainGui(player);
+                    break;
+
+                case "start":
+                    Tournament playerTournament = manager.getPlayerTournament(player);
+                    if (playerTournament != null &&
+                            player.getUUID().equals(playerTournament.getHostId()) &&
+                            playerTournament.getStatus() == Tournament.TournamentStatus.WAITING) {
+
+                        playerTournament.start();
+                        player.sendMessage(
+                                new StringTextComponent("Tournament started!")
+                                        .withStyle(TextFormatting.GREEN),
+                                player.getUUID());
+                    } else {
+                        player.sendMessage(
+                                new StringTextComponent("You cannot start this tournament")
+                                        .withStyle(TextFormatting.RED),
+                                player.getUUID());
+                    }
+                    // Reopen main GUI after start action
+                    openMainGui(player);
+                    break;
+
+                case "matches":
+                    if (tournamentName != null) {
+                        openMatchesGui(player, tournamentName);
+                        // Do NOT reopen main GUI here
+                    } else {
+                        // If no tournament name provided, go back to main GUI
+                        openMainGui(player);
+                    }
+                    break;
+
+                case "view_recurring":
+                    if (recurringId != null) {
+                        // Get the recurring tournament details
+                        RecurringTournament tournament = RecurringTournament.getRecurringTournament(recurringId);
+
+                        if (tournament != null) {
+                            // Display tournament details in chat
+                            player.sendMessage(
+                                    new StringTextComponent("=== Recurring Tournament: " + tournament.getName() + " ===")
+                                            .withStyle(TextFormatting.GOLD),
+                                    player.getUUID());
+
+                            player.sendMessage(
+                                    new StringTextComponent("Template Name: " + tournament.getTemplateName())
+                                            .withStyle(TextFormatting.YELLOW),
+                                    player.getUUID());
+
+                            player.sendMessage(
+                                    new StringTextComponent("Level Range: " + tournament.getMinLevel() + "-" + tournament.getMaxLevel())
+                                            .withStyle(TextFormatting.AQUA),
+                                    player.getUUID());
+
+                            player.sendMessage(
+                                    new StringTextComponent("Format: " + tournament.getFormat())
+                                            .withStyle(TextFormatting.LIGHT_PURPLE),
+                                    player.getUUID());
+
+                            player.sendMessage(
+                                    new StringTextComponent("Recurrence: Every " + formatHours(tournament.getRecurrenceHours()))
+                                            .withStyle(TextFormatting.GREEN),
+                                    player.getUUID());
+
+                            player.sendMessage(
+                                    new StringTextComponent("Next Occurrence: " + formatTimeUntil(tournament.getNextScheduled()))
+                                            .withStyle(TextFormatting.GREEN),
+                                    player.getUUID());
+
+                            // Check if right-clicked and has permission to delete
+                            if (clickType == ClickType.values()[1] && RecurringTournamentHandler.canCreateRecurringTournament(player)) {
+                                player.sendMessage(
+                                        new StringTextComponent("To delete this recurring tournament, type: /tournament deleterecurring " + tournament.getName())
+                                                .withStyle(TextFormatting.RED),
+                                        player.getUUID());
+                            }
+                        } else {
+                            player.sendMessage(
+                                    new StringTextComponent("Recurring tournament not found: " + recurringId)
                                             .withStyle(TextFormatting.RED),
                                     player.getUUID());
                         }
+                    }
+
+                    // Reopen the GUI they were on before
+                    if ("show_all_recurring".equals(action)) {
+                        openRecurringTournamentsGui(player);
+                    } else {
+                        openMainGui(player);
+                    }
+                    break;
+
+                case "back":
+                    // Go back to main GUI
+                    openMainGui(player);
+                    break;
+
+                case "show_all_recurring":
+                    // Show all recurring tournaments
+                    openRecurringTournamentsGui(player);
+                    break;
+
+                case "show_all_player":
+                    // Show all player tournaments
+                    openPlayerTournamentsGui(player);
+                    break;
+
+                case "create_recurring":
+                    if (RecurringTournamentHandler.canCreateRecurringTournament(player)) {
+                        // Open recurring tournament creation GUI
+                        TournamentRecurringCreationGUI.openCreationGUI(player);
                     } else {
                         player.sendMessage(
-                                new StringTextComponent("Recurring tournament not found: " + recurringId)
+                                new StringTextComponent("You don't have permission to create recurring tournaments")
                                         .withStyle(TextFormatting.RED),
                                 player.getUUID());
-                    }
-                }
-
-                // Reopen the GUI they were on before
-                if (action.equals("show_all_recurring")) {
-                    openRecurringTournamentsGui(player);
-                } else {
-                    openMainGui(player);
-                }
-                break;
-
-            case "back":
-                // Go back to main GUI
-                openMainGui(player);
-                break;
-
-            case "show_all_recurring":
-                // Show all recurring tournaments
-                openRecurringTournamentsGui(player);
-                break;
-
-            case "show_all_player":
-                // Show all player tournaments
-                openPlayerTournamentsGui(player);
-                break;
-
-            case "help":
-                player.sendMessage(
-                        new StringTextComponent("Tournament commands: /tournament join, leave, list, create, ready, delete")
-                                .withStyle(TextFormatting.YELLOW),
-                        player.getUUID());
-                // Reopen main GUI after help action
-                openMainGui(player);
-                break;
-
-            case "reloadconfig":
-                if (player.hasPermissions(2)) {
-                    try {
-                        // Reload the config
-                        UIConfigLoader.loadConfig(null);
-                        UIConfigLoader.saveConfig();
-
-                        player.sendMessage(
-                                new StringTextComponent("Tournament UI configuration reloaded successfully")
-                                        .withStyle(TextFormatting.GREEN),
-                                player.getUUID());
-
-                        Tournaments.LOGGER.info("UI config reloaded by {} via GUI", player.getName().getString());
-                    } catch (Exception e) {
-                        Tournaments.LOGGER.error("Failed to reload UI config via GUI", e);
-                        player.sendMessage(
-                                new StringTextComponent("Error reloading UI configuration: " + e.getMessage())
-                                        .withStyle(TextFormatting.RED),
-                                player.getUUID());
-                    }
-                } else {
-                    player.sendMessage(
-                            new StringTextComponent("You don't have permission to reload the configuration")
-                                    .withStyle(TextFormatting.RED),
-                            player.getUUID());
-                }
-                // Reopen main GUI after reload
-                openMainGui(player);
-                break;
-
-            case "openStatsBook":
-                // Create a readable book to open
-                ItemStack book = new ItemStack(Items.WRITTEN_BOOK);
-                CompoundNBT bookTag = book.getOrCreateTag();
-                bookTag.putString("author", player.getName().getString());
-                bookTag.putString("title", "Tournament Stats");
-                bookTag.putBoolean("resolved", true);
-
-                ListNBT pages = new ListNBT();
-
-                // Get or create EloPlayer to ensure stats exist even if player has no stats
-                EloPlayer eloPlayer = Tournaments.ELO_MANAGER.getOrCreatePlayer(player.getUUID());
-
-                // Format the stats text with colors
-                String statsText = "";
-
-                // Add ELO Rating with gold color
-                statsText += new StringTextComponent("ELO Rating: " + eloPlayer.getElo())
-                        .withStyle(TextFormatting.GOLD).getString() + "\n\n";
-
-                // Add wins with green color
-                statsText += new StringTextComponent("Wins: " + eloPlayer.getWins())
-                        .withStyle(TextFormatting.GREEN).getString() + "\n\n";
-
-                // Add losses with red color
-                statsText += new StringTextComponent("Losses: " + eloPlayer.getLosses())
-                        .withStyle(TextFormatting.RED).getString() + "\n\n";
-
-                // Calculate win rate
-                int totalGames = eloPlayer.getWins() + eloPlayer.getLosses();
-                if (totalGames > 0) {
-                    float winRate = (float) eloPlayer.getWins() * 100f / totalGames;
-                    statsText += new StringTextComponent("Win Rate: " + String.format("%.1f%%", winRate))
-                            .withStyle(TextFormatting.AQUA).getString();
-                } else {
-                    statsText += new StringTextComponent("Win Rate: 0.0%")
-                            .withStyle(TextFormatting.AQUA).getString();
-                }
-
-                // Add the page with plain text
-                ITextComponent page = new StringTextComponent(statsText);
-                pages.add(StringNBT.valueOf(ITextComponent.Serializer.toJson(page)));
-                bookTag.put("pages", pages);
-
-                Tournaments.LOGGER.info("Opening stats book for player: {}", player.getName().getString());
-
-                // Store player's current item - MOVED OUTSIDE try-catch for proper scope
-                ItemStack originalItem = player.getItemInHand(net.minecraft.util.Hand.MAIN_HAND);
-
-                try {
-                    // SIMPLER APPROACH: Give the player a copy of the book and delete after a delay
-
-                    // Give player the book
-                    player.setItemInHand(net.minecraft.util.Hand.MAIN_HAND, book.copy());
-
-                    // Open it directly using Minecraft's built-in method
-                    player.openItemGui(book, net.minecraft.util.Hand.MAIN_HAND);
-
-                    // Log that we attempted to open the book
-                    Tournaments.LOGGER.info("Stats book opened for player {}", player.getName().getString());
-
-                    // Schedule a task to restore the original item with a longer delay (3 ticks)
-                    player.getServer().tell(new net.minecraft.util.concurrent.TickDelayedTask(3, () -> {
-                        // After a short delay, restore original item
-                        player.setItemInHand(net.minecraft.util.Hand.MAIN_HAND, originalItem);
-
-                        // For debugging
-                        Tournaments.LOGGER.info("Restored original item");
-
-                        // Open main GUI again
+                        // Reopen main GUI
                         openMainGui(player);
-                    }));
-                } catch (Exception e) {
-                    Tournaments.LOGGER.error("Error opening stats book: {}", e.getMessage(), e);
-                    player.sendMessage(
-                            new StringTextComponent("Error opening stats book: " + e.getMessage())
-                                    .withStyle(TextFormatting.RED),
-                            player.getUUID());
+                    }
+                    break;
 
-                    // Restore original item immediately on error
-                    player.setItemInHand(net.minecraft.util.Hand.MAIN_HAND, originalItem);
-                }
-                break;
+                case "create_player":
+                    if (RecurringTournamentHandler.canCreatePlayerTournament(player)) {
+                        // Open regular tournament creation GUI
+                        TournamentCreationGUI.openCreationGUI(player);
+                    } else {
+                        player.sendMessage(
+                                new StringTextComponent("You don't have permission to create tournaments")
+                                        .withStyle(TextFormatting.RED),
+                                player.getUUID());
+                        // Reopen main GUI
+                        openMainGui(player);
+                    }
+                    break;
 
-            default:
-                // Unknown action, just reopen main GUI
-                player.sendMessage(
-                        new StringTextComponent("Unknown action: " + action)
-                                .withStyle(TextFormatting.RED),
-                        player.getUUID());
-                openMainGui(player);
-                break;
+                default:
+                    if ("none".equals(action)) {
+                        // Just reopen the main GUI for "none" action
+                        openMainGui(player);
+                    } else {
+                        // Unknown action, just reopen main GUI
+                        player.sendMessage(
+                                new StringTextComponent("Unknown action: " + action)
+                                        .withStyle(TextFormatting.RED),
+                                player.getUUID());
+                        openMainGui(player);
+                    }
+                    break;
+            }
+        } finally {
+            // Always reset the processing flag to prevent deadlocks
+            processingAction = false;
         }
     }
 
     /**
-     * Process GUI actions - legacy method for compatibility
+     * Process GUI actions - simpler version that forwards to full version
      */
     public static void processGuiAction(ServerPlayerEntity player, String action, String tournamentName) {
+        // Handle create action specially to avoid problems
+        if ("create".equals(action)) {
+            player.closeContainer();
+            Tournaments.LOGGER.info("GUI FLOW DEBUG: Direct create action in 3-param version");
+
+            boolean canCreatePlayer = RecurringTournamentHandler.canCreatePlayerTournament(player);
+            if (canCreatePlayer) {
+                TournamentCreationGUI.openCreationGUI(player);
+                return;
+            }
+        }
+
+        // For other actions, call the 5-param version (which now has recursion protection)
         processGuiAction(player, action, tournamentName, null, null);
     }
+
 
     /**
      * Format time in hours nicely (e.g., "2 hours" or "30 minutes")
