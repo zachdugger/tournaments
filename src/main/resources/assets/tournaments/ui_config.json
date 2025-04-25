@@ -4,10 +4,10 @@
     "title_item": "minecraft:nether_star",
     "slots": {
       "title_slot": 4,
-      "join_button_slot": 4,
-      "leave_button_slot": 4,
+      "join_button_slot": 2,
+      "leave_button_slot": 2,
       "create_button_slot": 8,
-      "start_button_slot": 6,
+      "start_button_slot": 4,
       "tournaments_start_slot": 18,
       "leaderboard_1": 10,
       "leaderboard_2": 11,
@@ -17,8 +17,8 @@
       "leaderboard_6": 15,
       "leaderboard_7": 16,
       "stats_book_slot": 0,
-      "recurring_label_slot": 27,
-      "player_label_slot": 36,
+      "recurring_label_slot": 28,
+      "player_label_slot": 37,
       "recurring_show_all_slot": 34,
       "player_show_all_slot": 43,
       "recurring_matches_start": 29,
@@ -43,7 +43,7 @@
         "item": "minecraft:emerald",
         "name": "Create Tournament",
         "color": "green",
-        "action": "create"
+        "action": "create_player"
       },
       "start_button": {
         "item": "minecraft:beacon",

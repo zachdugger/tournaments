@@ -128,9 +128,18 @@ public class RecurringTournament {
             extraSettings.putString("recurringId", name);
             manager.setTournamentExtraSettings(uniqueName, extraSettings);
 
-            Tournaments.LOGGER.info("Created recurring tournament: {} (template: {})", uniqueName, name);
+            Tournaments.LOGGER.info("Created recurring tournament instance: {} (template: {})", uniqueName, name);
+
+            // Broadcast message to all online players
+            net.minecraftforge.fml.server.ServerLifecycleHooks.getCurrentServer().getPlayerList().getPlayers().forEach(
+                    player -> player.sendMessage(
+                            new net.minecraft.util.text.StringTextComponent("New tournament started: " + uniqueName)
+                                    .withStyle(net.minecraft.util.text.TextFormatting.GREEN),
+                            player.getUUID()
+                    )
+            );
         } else {
-            Tournaments.LOGGER.error("Failed to create recurring tournament: {}", name);
+            Tournaments.LOGGER.error("Failed to create recurring tournament instance: {}", name);
         }
     }
 
@@ -173,7 +182,12 @@ public class RecurringTournament {
      */
     public static void checkAllRecurringTournaments() {
         for (RecurringTournament tournament : new ArrayList<>(recurringTournaments.values())) {
-            tournament.checkAndCreateTournament();
+            try {
+                tournament.checkAndCreateTournament();
+            } catch (Exception e) {
+                Tournaments.LOGGER.error("Error checking recurring tournament {}: {}",
+                        tournament.getName(), e.getMessage(), e);
+            }
         }
     }
 
@@ -190,6 +204,8 @@ public class RecurringTournament {
 
             try (FileWriter writer = new FileWriter(file)) {
                 GSON.toJson(recurringTournaments.values(), writer);
+                Tournaments.LOGGER.info("Saved {} recurring tournaments to {}",
+                        recurringTournaments.size(), RECURRING_FILE);
             }
         } catch (IOException e) {
             Tournaments.LOGGER.error("Failed to save recurring tournaments", e);
@@ -207,14 +223,22 @@ public class RecurringTournament {
                 List<RecurringTournament> tournaments = GSON.fromJson(reader, listType);
 
                 recurringTournaments.clear();
-                for (RecurringTournament tournament : tournaments) {
-                    recurringTournaments.put(tournament.name, tournament);
-                }
 
-                Tournaments.LOGGER.info("Loaded {} recurring tournaments", recurringTournaments.size());
+                if (tournaments != null) {
+                    for (RecurringTournament tournament : tournaments) {
+                        recurringTournaments.put(tournament.name, tournament);
+                    }
+                    Tournaments.LOGGER.info("Loaded {} recurring tournaments", recurringTournaments.size());
+                } else {
+                    Tournaments.LOGGER.info("No recurring tournaments found in the save file");
+                }
             } catch (IOException e) {
                 Tournaments.LOGGER.error("Failed to load recurring tournaments", e);
+            } catch (Exception e) {
+                Tournaments.LOGGER.error("Error parsing recurring tournaments file", e);
             }
+        } else {
+            Tournaments.LOGGER.info("No recurring tournaments file found at {}", RECURRING_FILE);
         }
     }
 

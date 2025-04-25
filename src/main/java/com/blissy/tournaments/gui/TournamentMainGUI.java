@@ -281,10 +281,12 @@ public class TournamentMainGUI {
             CompoundNBT skullOwner = new CompoundNBT();
             skullOwner.putString("Name", topPlayerElo.getPlayerName());
 
-            // UUID is required for proper skin lookup
+            // UUID is required for proper skin lookup - correctly formatted as IntArray
             UUID playerUUID = topPlayerElo.getPlayerId();
+            int[] uuidArray = uuidToIntArray(playerUUID);
+
             CompoundNBT uuidTag = new CompoundNBT();
-            uuidTag.putIntArray("Id", uuidToIntArray(playerUUID));
+            uuidTag.putIntArray("Id", uuidArray);
             skullOwner.put("Id", uuidTag);
 
             CompoundNBT tag = playerHead.getOrCreateTag();
@@ -336,6 +338,7 @@ public class TournamentMainGUI {
                 (int) least
         };
     }
+
     /**
      * Add in-progress tournament displays in specified slots
      */
@@ -530,7 +533,7 @@ public class TournamentMainGUI {
                         .withStyle(recurringShowAllConfig.getColor()));
 
                 CompoundNBT recurringShowAllTag = recurringShowAll.getOrCreateTag();
-                recurringShowAllTag.putString("GuiAction", recurringShowAllConfig.getAction());
+                recurringShowAllTag.putString("GuiAction", "show_all_recurring");
 
                 int slot = UIConfigLoader.getSlot(config, "recurring_show_all_slot");
                 if (slot >= 0 && slot < inventory.getContainerSize()) {
@@ -548,7 +551,7 @@ public class TournamentMainGUI {
                         .withStyle(playerShowAllConfig.getColor()));
 
                 CompoundNBT playerShowAllTag = playerShowAll.getOrCreateTag();
-                playerShowAllTag.putString("GuiAction", playerShowAllConfig.getAction());
+                playerShowAllTag.putString("GuiAction", "show_all_player");
 
                 int slot = UIConfigLoader.getSlot(config, "player_show_all_slot");
                 if (slot >= 0 && slot < inventory.getContainerSize()) {
@@ -576,7 +579,7 @@ public class TournamentMainGUI {
         // Get recurring tournaments
         List<RecurringTournament> recurringTournaments = RecurringTournament.getAllRecurringTournaments();
 
-        // Safely get the start slot - default to 29 as requested
+        // Safely get the start slot - using slot 29 as requested
         int startSlot = 29;
         if (config.has("slots")) {
             JsonObject slots = config.getAsJsonObject("slots");
@@ -640,15 +643,59 @@ public class TournamentMainGUI {
                         .withStyle(TextFormatting.YELLOW));
             }
 
+            // Find tournament instances for this recurring tournament
+            List<String> instances = findRecurringTournamentInstances(tournament.getName());
+            if (!instances.isEmpty()) {
+                lore.add(new StringTextComponent("Click to view active instances")
+                        .withStyle(TextFormatting.GREEN));
+
+                // Add the first few instances to the lore
+                int maxInstancesToShow = Math.min(instances.size(), 3);
+                for (int j = 0; j < maxInstancesToShow; j++) {
+                    lore.add(new StringTextComponent("- " + instances.get(j))
+                            .withStyle(TextFormatting.YELLOW));
+                }
+
+                if (instances.size() > maxInstancesToShow) {
+                    lore.add(new StringTextComponent("...and " + (instances.size() - maxInstancesToShow) + " more")
+                            .withStyle(TextFormatting.YELLOW));
+                }
+            } else {
+                lore.add(new StringTextComponent("No active tournament instances")
+                        .withStyle(TextFormatting.RED));
+            }
+
             TournamentGuiHandler.setItemLore(tournamentItem, lore);
 
             // Add tournament ID to item NBT
             CompoundNBT nbt = tournamentItem.getOrCreateTag();
             nbt.putString("RecurringTournamentId", tournament.getName());
-            nbt.putString("GuiAction", "view_recurring");
+
+            // Change from "view_recurring" to "view_recurring_instances"
+            // This distinguishes viewing recurring tournament info from joining instances
+            nbt.putString("GuiAction", "view_recurring_instances");
 
             inventory.setItem(slot, tournamentItem);
         }
+    }
+    private static List<String> findRecurringTournamentInstances(String recurringId) {
+        List<String> instances = new ArrayList<>();
+        TournamentManager manager = TournamentManager.getInstance();
+
+        // Check all tournaments for ones that are instances of this recurring tournament
+        for (Tournament tournament : manager.getAllTournaments().values()) {
+            CompoundNBT extraSettings = manager.getTournamentExtraSettings(tournament.getName());
+            if (extraSettings != null &&
+                    extraSettings.contains("isRecurring") &&
+                    extraSettings.getBoolean("isRecurring") &&
+                    extraSettings.contains("recurringId") &&
+                    extraSettings.getString("recurringId").equals(recurringId)) {
+
+                instances.add(tournament.getName());
+            }
+        }
+
+        return instances;
     }
 
     /**
@@ -781,9 +828,8 @@ public class TournamentMainGUI {
             }
 
             // Combine the strings from the styled components
-            ITextComponent statusText = new StringTextComponent("Status: ").withStyle(TextFormatting.GRAY);
-            ITextComponent statusValue = new StringTextComponent(tournament.getStatus().toString()).withStyle(statusColor);
-            lore.add(new StringTextComponent(statusText.getString() + statusValue.getString()));
+            lore.add(new StringTextComponent("Status: " + tournament.getStatus().toString())
+                    .withStyle(statusColor));
 
             lore.add(new StringTextComponent("Players: " + tournament.getParticipantCount() +
                     "/" + tournament.getMaxParticipants())

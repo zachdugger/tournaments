@@ -34,8 +34,12 @@ public class RecurringTournamentHandler {
             return;
         }
 
-        Tournaments.LOGGER.debug("Checking recurring tournaments...");
-        RecurringTournament.checkAllRecurringTournaments();
+        try {
+            Tournaments.LOGGER.debug("Checking recurring tournaments...");
+            RecurringTournament.checkAllRecurringTournaments();
+        } catch (Exception e) {
+            Tournaments.LOGGER.error("Error during recurring tournament check: {}", e.getMessage(), e);
+        }
     }
 
     /**
@@ -48,20 +52,46 @@ public class RecurringTournamentHandler {
 
     /**
      * Check if a player has permission to create normal tournaments
+     * Added checks for player.getPersistentData() to avoid NullPointerExceptions
      */
     public static boolean canCreatePlayerTournament(ServerPlayerEntity player) {
         // Players with "tournaments.create" permission can create tournaments
         // This is a simpler check than the full permission system
-        return player != null && (player.hasPermissions(2) ||
-                player.getPersistentData().getBoolean("tournaments.create"));
+        if (player == null) {
+            return false;
+        }
+
+        if (player.hasPermissions(2)) {
+            return true;
+        }
+
+        if (player.getPersistentData() != null &&
+                player.getPersistentData().contains("tournaments.create")) {
+            return player.getPersistentData().getBoolean("tournaments.create");
+        }
+
+        return false;
     }
 
     /**
      * Set player tournament creation permission
      */
     public static void setPlayerTournamentPermission(ServerPlayerEntity player, boolean canCreate) {
-        if (player != null) {
+        if (player != null && player.getPersistentData() != null) {
             player.getPersistentData().putBoolean("tournaments.create", canCreate);
+
+            // Notify player of permission change
+            player.sendMessage(
+                    new net.minecraft.util.text.StringTextComponent(
+                            canCreate ? "You now have permission to create tournaments" : "Your tournament creation permission has been revoked")
+                            .withStyle(canCreate ?
+                                    net.minecraft.util.text.TextFormatting.GREEN :
+                                    net.minecraft.util.text.TextFormatting.RED),
+                    player.getUUID()
+            );
+
+            Tournaments.LOGGER.info("Tournament creation permission for {} set to {}",
+                    player.getName().getString(), canCreate);
         }
     }
 }

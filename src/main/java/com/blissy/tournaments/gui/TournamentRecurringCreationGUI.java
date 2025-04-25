@@ -259,73 +259,91 @@ public class TournamentRecurringCreationGUI {
      * Create a recurring tournament with the specified or default values
      */
     public static void createRecurringTournament(ServerPlayerEntity player) {
-        // Get all settings from player data
-        String id = getRecurringCreationSetting(player, "recurringId");
-        String templateName = getRecurringCreationSetting(player, "templateName");
-        String minLevelStr = getRecurringCreationSetting(player, "minLevel");
-        String maxLevelStr = getRecurringCreationSetting(player, "maxLevel");
-        String maxParticipantsStr = getRecurringCreationSetting(player, "maxParticipants");
-        String format = getRecurringCreationSetting(player, "format");
-        String entryFeeStr = getRecurringCreationSetting(player, "entryFee");
-        String recurrenceIntervalStr = getRecurringCreationSetting(player, "recurrenceInterval");
+        try {
+            // Get all settings from player data
+            String id = getRecurringCreationSetting(player, "recurringId");
+            String templateName = getRecurringCreationSetting(player, "templateName");
+            String minLevelStr = getRecurringCreationSetting(player, "minLevel");
+            String maxLevelStr = getRecurringCreationSetting(player, "maxLevel");
+            String maxParticipantsStr = getRecurringCreationSetting(player, "maxParticipants");
+            String format = getRecurringCreationSetting(player, "format");
+            String entryFeeStr = getRecurringCreationSetting(player, "entryFee");
+            String recurrenceIntervalStr = getRecurringCreationSetting(player, "recurrenceInterval");
 
-        // Check required fields
-        if (id == null || id.trim().isEmpty()) {
+            Tournaments.LOGGER.info("Creating recurring tournament with settings: id={}, template={}, minLevel={}, maxLevel={}, maxParticipants={}, format={}, entryFee={}, interval={}",
+                    id, templateName, minLevelStr, maxLevelStr, maxParticipantsStr, format, entryFeeStr, recurrenceIntervalStr);
+
+            // Check required fields
+            if (id == null || id.trim().isEmpty()) {
+                player.sendMessage(
+                        new StringTextComponent("Recurring Tournament ID cannot be empty")
+                                .withStyle(TextFormatting.RED),
+                        player.getUUID());
+                openCreationGUI(player);
+                return;
+            }
+
+            if (templateName == null || templateName.trim().isEmpty()) {
+                player.sendMessage(
+                        new StringTextComponent("Tournament Template Name cannot be empty")
+                                .withStyle(TextFormatting.RED),
+                        player.getUUID());
+                openCreationGUI(player);
+                return;
+            }
+
+            // Check if ID already exists
+            if (RecurringTournament.getRecurringTournament(id) != null) {
+                player.sendMessage(
+                        new StringTextComponent("A recurring tournament with this ID already exists")
+                                .withStyle(TextFormatting.RED),
+                        player.getUUID());
+                openCreationGUI(player);
+                return;
+            }
+
+            // Parse values with defaults
+            int minLevel = minLevelStr != null ? Integer.parseInt(minLevelStr) : DEFAULT_MIN_LEVEL;
+            int maxLevel = maxLevelStr != null ? Integer.parseInt(maxLevelStr) : DEFAULT_MAX_LEVEL;
+            int maxParticipants = maxParticipantsStr != null ? Integer.parseInt(maxParticipantsStr) : DEFAULT_MAX_PARTICIPANTS;
+            String tournamentFormat = format != null ? format : DEFAULT_FORMAT;
+            double entryFee = entryFeeStr != null ? Double.parseDouble(entryFeeStr) : DEFAULT_ENTRY_FEE;
+            double recurrenceHours = recurrenceIntervalStr != null ? Double.parseDouble(recurrenceIntervalStr) : DEFAULT_RECURRENCE_HOURS;
+
+            // Create the recurring tournament
+            RecurringTournament tournament = new RecurringTournament(
+                    id, templateName, minLevel, maxLevel, maxParticipants,
+                    tournamentFormat, entryFee, recurrenceHours, player.getUUID());
+
+            RecurringTournament.addRecurringTournament(tournament);
+
+            // Notify the player
             player.sendMessage(
-                    new StringTextComponent("Recurring Tournament ID cannot be empty")
+                    new StringTextComponent("Recurring tournament created successfully: " + id)
+                            .withStyle(TextFormatting.GREEN),
+                    player.getUUID());
+
+            player.sendMessage(
+                    new StringTextComponent("It will create a new tournament instance every " + formatHours(recurrenceHours))
+                            .withStyle(TextFormatting.YELLOW),
+                    player.getUUID());
+
+            // Try to create first instance immediately
+            Tournaments.LOGGER.info("Attempting to create first instance of recurring tournament {}", id);
+            tournament.checkAndCreateTournament();
+
+            // Open the main GUI to see the new recurring tournament
+            TournamentMainGUI.openMainGui(player);
+        } catch (Exception e) {
+            Tournaments.LOGGER.error("Error creating recurring tournament", e);
+            player.sendMessage(
+                    new StringTextComponent("Error creating recurring tournament: " + e.getMessage())
                             .withStyle(TextFormatting.RED),
                     player.getUUID());
+
+            // Reopen the creation GUI
             openCreationGUI(player);
-            return;
         }
-
-        if (templateName == null || templateName.trim().isEmpty()) {
-            player.sendMessage(
-                    new StringTextComponent("Tournament Template Name cannot be empty")
-                            .withStyle(TextFormatting.RED),
-                    player.getUUID());
-            openCreationGUI(player);
-            return;
-        }
-
-        // Check if ID already exists
-        if (RecurringTournament.getRecurringTournament(id) != null) {
-            player.sendMessage(
-                    new StringTextComponent("A recurring tournament with this ID already exists")
-                            .withStyle(TextFormatting.RED),
-                    player.getUUID());
-            openCreationGUI(player);
-            return;
-        }
-
-        // Parse values with defaults
-        int minLevel = minLevelStr != null ? Integer.parseInt(minLevelStr) : DEFAULT_MIN_LEVEL;
-        int maxLevel = maxLevelStr != null ? Integer.parseInt(maxLevelStr) : DEFAULT_MAX_LEVEL;
-        int maxParticipants = maxParticipantsStr != null ? Integer.parseInt(maxParticipantsStr) : DEFAULT_MAX_PARTICIPANTS;
-        String tournamentFormat = format != null ? format : DEFAULT_FORMAT;
-        double entryFee = entryFeeStr != null ? Double.parseDouble(entryFeeStr) : DEFAULT_ENTRY_FEE;
-        double recurrenceHours = recurrenceIntervalStr != null ? Double.parseDouble(recurrenceIntervalStr) : DEFAULT_RECURRENCE_HOURS;
-
-        // Create the recurring tournament
-        RecurringTournament tournament = new RecurringTournament(
-                id, templateName, minLevel, maxLevel, maxParticipants,
-                tournamentFormat, entryFee, recurrenceHours, player.getUUID());
-
-        RecurringTournament.addRecurringTournament(tournament);
-
-        // Notify the player
-        player.sendMessage(
-                new StringTextComponent("Recurring tournament created successfully: " + id)
-                        .withStyle(TextFormatting.GREEN),
-                player.getUUID());
-
-        player.sendMessage(
-                new StringTextComponent("It will create a new tournament instance every " + formatHours(recurrenceHours))
-                        .withStyle(TextFormatting.YELLOW),
-                player.getUUID());
-
-        // Open the main GUI to see the new recurring tournament
-        TournamentMainGUI.openMainGui(player);
     }
 
     /**
