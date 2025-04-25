@@ -1,5 +1,6 @@
 package com.blissy.tournaments.gui;
 
+import com.blissy.tournaments.TournamentManager;
 import com.blissy.tournaments.Tournaments;
 import com.blissy.tournaments.config.UIConfigLoader;
 import com.blissy.tournaments.data.RecurringTournament;
@@ -327,6 +328,33 @@ public class TournamentRecurringCreationGUI {
                     new StringTextComponent("It will create a new tournament instance every " + formatHours(recurrenceHours))
                             .withStyle(TextFormatting.YELLOW),
                     player.getUUID());
+
+            // Create first instance immediately with a better name
+            String instanceName = templateName + "_" + System.currentTimeMillis();
+
+            // Create the tournament instance
+            TournamentManager manager = TournamentManager.getInstance();
+            if (manager.createTournament(instanceName, maxParticipants, player)) {
+                // Set tournament settings
+                manager.setTournamentSettings(instanceName, minLevel, maxLevel, format);
+
+                // Store entry fee and recurring info in tournament settings
+                CompoundNBT extraSettings = new CompoundNBT();
+                extraSettings.putDouble("entryFee", entryFee);
+                extraSettings.putBoolean("isRecurring", true);
+                extraSettings.putString("recurringId", id);
+                manager.setTournamentExtraSettings(instanceName, extraSettings);
+
+                player.sendMessage(
+                        new StringTextComponent("First tournament instance created: " + instanceName)
+                                .withStyle(TextFormatting.GREEN),
+                        player.getUUID());
+
+                player.sendMessage(
+                        new StringTextComponent("Type /tournament join " + instanceName + " to join")
+                                .withStyle(TextFormatting.YELLOW),
+                        player.getUUID());
+            }
 
             // Try to create first instance immediately
             Tournaments.LOGGER.info("Attempting to create first instance of recurring tournament {}", id);

@@ -3,9 +3,11 @@ package com.blissy.tournaments.gui;
 import com.blissy.tournaments.Tournaments;
 import com.blissy.tournaments.handlers.RecurringTournamentHandler;
 import net.minecraft.entity.player.ServerPlayerEntity;
+import net.minecraft.inventory.Inventory;
 import net.minecraft.inventory.container.Container;
 import net.minecraft.inventory.container.Slot;
 import net.minecraft.item.ItemStack;
+import net.minecraft.item.Items;
 import net.minecraft.nbt.CompoundNBT;
 import net.minecraft.nbt.ListNBT;
 import net.minecraft.nbt.StringNBT;
@@ -16,7 +18,9 @@ import net.minecraftforge.event.entity.player.PlayerContainerEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 
+import java.util.ArrayList;
 import java.util.List;
+import com.blissy.tournaments.data.Tournament;
 
 /**
  * Handler for managing tournament GUI containers
@@ -284,6 +288,39 @@ public class TournamentGuiHandler {
             } else {
                 TournamentMainGUI.processGuiAction(player, action, tournamentName);
             }
+        }
+    }
+
+    /**
+     * Helper method to check if a player can start a tournament
+     */
+    public static boolean canPlayerStartTournament(ServerPlayerEntity player, Tournament tournament) {
+        return tournament != null &&
+                tournament.getStatus() == Tournament.TournamentStatus.WAITING &&
+                player.getUUID().equals(tournament.getHostId());
+    }
+
+    /**
+     * Add a start button to tournament UI views for hosts
+     */
+    public static void addStartButtonIfHost(Inventory inventory, Tournament tournament,
+                                            ServerPlayerEntity player, int slot) {
+        if (canPlayerStartTournament(player, tournament)) {
+            ItemStack startButton = new ItemStack(Items.BEACON);
+            startButton.setHoverName(new StringTextComponent("Start Tournament")
+                    .withStyle(TextFormatting.GOLD, TextFormatting.BOLD));
+
+            List<ITextComponent> startLore = new ArrayList<>();
+            startLore.add(new StringTextComponent("Click to start this tournament")
+                    .withStyle(TextFormatting.YELLOW));
+            setItemLore(startButton, startLore);
+
+            CompoundNBT startTag = startButton.getOrCreateTag();
+            startTag.putString("GuiAction", "start");
+            startTag.putString("TournamentName", tournament.getName());
+
+            // Place the start button
+            inventory.setItem(slot, startButton);
         }
     }
 

@@ -214,6 +214,7 @@ public class TournamentMainGUI {
 
                 CompoundNBT startTag = startButton.getOrCreateTag();
                 startTag.putString("GuiAction", startConfig.getAction());
+                startTag.putString("TournamentName", playerTournament.getName());
                 inventory.setItem(UIConfigLoader.getSlot(config, "start_button_slot"), startButton);
             }
         }
@@ -281,13 +282,10 @@ public class TournamentMainGUI {
             CompoundNBT skullOwner = new CompoundNBT();
             skullOwner.putString("Name", topPlayerElo.getPlayerName());
 
-            // UUID is required for proper skin lookup - correctly formatted as IntArray
+            // UUID is required for proper skin lookup
             UUID playerUUID = topPlayerElo.getPlayerId();
             int[] uuidArray = uuidToIntArray(playerUUID);
-
-            CompoundNBT uuidTag = new CompoundNBT();
-            uuidTag.putIntArray("Id", uuidArray);
-            skullOwner.put("Id", uuidTag);
+            skullOwner.putIntArray("Id", uuidArray);
 
             CompoundNBT tag = playerHead.getOrCreateTag();
             tag.put("SkullOwner", skullOwner);
@@ -329,13 +327,13 @@ public class TournamentMainGUI {
     }
 
     private static int[] uuidToIntArray(UUID uuid) {
-        long most = uuid.getMostSignificantBits();
-        long least = uuid.getLeastSignificantBits();
-        return new int[]{
-                (int) (most >> 32),
-                (int) most,
-                (int) (least >> 32),
-                (int) least
+        long mostSigBits = uuid.getMostSignificantBits();
+        long leastSigBits = uuid.getLeastSignificantBits();
+        return new int[] {
+                (int)(mostSigBits >> 32),
+                (int)mostSigBits,
+                (int)(leastSigBits >> 32),
+                (int)leastSigBits
         };
     }
 
@@ -652,13 +650,33 @@ public class TournamentMainGUI {
                 // Add the first few instances to the lore
                 int maxInstancesToShow = Math.min(instances.size(), 3);
                 for (int j = 0; j < maxInstancesToShow; j++) {
-                    lore.add(new StringTextComponent("- " + instances.get(j))
-                            .withStyle(TextFormatting.YELLOW));
+                    String instanceName = instances.get(j);
+                    Tournament instance = TournamentManager.getInstance().getTournament(instanceName);
+                    if (instance != null) {
+                        lore.add(new StringTextComponent("- " + instanceName + " (" +
+                                instance.getParticipantCount() + "/" + instance.getMaxParticipants() + ")")
+                                .withStyle(TextFormatting.YELLOW));
+                    } else {
+                        lore.add(new StringTextComponent("- " + instanceName)
+                                .withStyle(TextFormatting.YELLOW));
+                    }
                 }
 
                 if (instances.size() > maxInstancesToShow) {
                     lore.add(new StringTextComponent("...and " + (instances.size() - maxInstancesToShow) + " more")
                             .withStyle(TextFormatting.YELLOW));
+                }
+
+                // For instances that are in WAITING state, add action to join
+                for (String instanceName : instances) {
+                    Tournament instance = TournamentManager.getInstance().getTournament(instanceName);
+                    if (instance != null && instance.getStatus() == Tournament.TournamentStatus.WAITING) {
+                        // Add join action for the first available waiting instance
+                        CompoundNBT nbt = tournamentItem.getOrCreateTag();
+                        nbt.putString("TournamentName", instanceName);
+                        nbt.putString("GuiAction", "join");
+                        break;
+                    }
                 }
             } else {
                 lore.add(new StringTextComponent("No active tournament instances")
@@ -671,13 +689,95 @@ public class TournamentMainGUI {
             CompoundNBT nbt = tournamentItem.getOrCreateTag();
             nbt.putString("RecurringTournamentId", tournament.getName());
 
-            // Change from "view_recurring" to "view_recurring_instances"
-            // This distinguishes viewing recurring tournament info from joining instances
-            nbt.putString("GuiAction", "view_recurring_instances");
+            // If no specific join action was set, use the view_recurring_instances action
+            if (!nbt.contains("GuiAction")) {
+                nbt.putString("GuiAction", "view_recurring_instances");
+            }
 
             inventory.setItem(slot, tournamentItem);
+
+            // Add instance buttons if applicable
+            if (slot < 45) { // Make sure we have room for instance buttons
+                addRecurringInstanceButtons(inventory, tournament, slot, player);
+            }
         }
     }
+
+    /**
+     * Add buttons for joining recurring tournament instances
+     */
+    private static void addRecurringInstanceButtons(Inventory inventory, RecurringTournament recurringTournament,
+                                                    int baseSlot, ServerPlayerEntity player) {
+        // Find active instances
+        List<String> instances = findRecurringTournamentInstances(recurringTournament.getName());
+
+        if (instances.isEmpty()) {
+            return;
+        }
+
+        // Add instance buttons below the tournament info
+        int instanceSlot = baseSlot + 9; // Next row
+
+        for (String instanceName : instances) {
+            Tournament instance = TournamentManager.getInstance().getTournament(instanceName);
+            if (instance == null) continue;
+
+            // Choose item based on tournament status
+            ItemStack instanceItem;
+            switch (instance.getStatus()) {
+                case WAITING:
+                    instanceItem = new ItemStack(Items.PAPER);
+                    break;
+                case IN_PROGRESS:
+                    instanceItem = new ItemStack(Items.BOOK);
+                    break;
+                default:
+                    instanceItem = new ItemStack(Items.WRITABLE_BOOK);
+                    break;
+            }
+
+            // Set name and lore
+            instanceItem.setHoverName(new StringTextComponent(instanceName)
+                    .withStyle(TextFormatting.AQUA));
+
+            List<ITextComponent> lore = new ArrayList<>();
+            lore.add(new StringTextComponent("Status: " + instance.getStatus())
+                    .withStyle(instance.getStatus() == Tournament.TournamentStatus.WAITING ?
+                            TextFormatting.GREEN : TextFormatting.GOLD));
+
+            lore.add(new StringTextComponent("Players: " + instance.getParticipantCount() +
+                    "/" + instance.getMaxParticipants())
+                    .withStyle(TextFormatting.GRAY));
+
+            if (instance.getStatus() == Tournament.TournamentStatus.WAITING) {
+                lore.add(new StringTextComponent("Click to join this tournament")
+                        .withStyle(TextFormatting.YELLOW));
+
+                // Add action to join
+                CompoundNBT tag = instanceItem.getOrCreateTag();
+                tag.putString("TournamentName", instanceName);
+                tag.putString("GuiAction", "join");
+            } else if (instance.getStatus() == Tournament.TournamentStatus.IN_PROGRESS) {
+                lore.add(new StringTextComponent("Click to view matches")
+                        .withStyle(TextFormatting.YELLOW));
+
+                // Add action to view matches
+                CompoundNBT tag = instanceItem.getOrCreateTag();
+                tag.putString("TournamentName", instanceName);
+                tag.putString("GuiAction", "matches");
+            }
+
+            TournamentGuiHandler.setItemLore(instanceItem, lore);
+
+            // Add to inventory
+            inventory.setItem(instanceSlot, instanceItem);
+            instanceSlot++;
+
+            // Only show up to 3 instances
+            if (instanceSlot - (baseSlot + 9) >= 3) break;
+        }
+    }
+
     private static List<String> findRecurringTournamentInstances(String recurringId) {
         List<String> instances = new ArrayList<>();
         TournamentManager manager = TournamentManager.getInstance();
@@ -904,6 +1004,17 @@ public class TournamentMainGUI {
             }
 
             inventory.setItem(slot, tournamentItem);
+
+            // After adding the tournament item to the inventory
+            if (tournament.getStatus() == Tournament.TournamentStatus.WAITING &&
+                    player.getUUID().equals(tournament.getHostId())) {
+                // Add a start button next to the tournament
+                int startButtonSlot = slot + 1;
+                if (startButtonSlot < inventory.getContainerSize()) {
+                    TournamentGuiHandler.addStartButtonIfHost(inventory, tournament, player, startButtonSlot);
+                    slot++; // Increment slot to account for the added button
+                }
+            }
         }
     }
 
@@ -963,6 +1074,28 @@ public class TournamentMainGUI {
                         .withStyle(TextFormatting.YELLOW));
             }
 
+            // Find active instances of this recurring tournament
+            List<String> instances = findRecurringTournamentInstances(tournament.getName());
+            if (!instances.isEmpty()) {
+                lore.add(new StringTextComponent("Active instances: " + instances.size())
+                        .withStyle(TextFormatting.GOLD));
+
+                // Add WAITING instances that can be joined
+                for (String instanceName : instances) {
+                    Tournament instance = TournamentManager.getInstance().getTournament(instanceName);
+                    if (instance != null && instance.getStatus() == Tournament.TournamentStatus.WAITING) {
+                        lore.add(new StringTextComponent("Click to join: " + instanceName)
+                                .withStyle(TextFormatting.GREEN));
+
+                        // Add join action
+                        CompoundNBT nbt = tournamentItem.getOrCreateTag();
+                        nbt.putString("TournamentName", instanceName);
+                        nbt.putString("GuiAction", "join");
+                        break;
+                    }
+                }
+            }
+
             // Admin actions if player has permission
             if (RecurringTournamentHandler.canCreateRecurringTournament(player)) {
                 lore.add(new StringTextComponent("Right click to delete")
@@ -974,9 +1107,19 @@ public class TournamentMainGUI {
             // Add tournament ID to item NBT
             CompoundNBT nbt = tournamentItem.getOrCreateTag();
             nbt.putString("RecurringTournamentId", tournament.getName());
-            nbt.putString("GuiAction", "view_recurring");
+
+            // If no action set yet, set view_recurring action
+            if (!nbt.contains("GuiAction")) {
+                nbt.putString("GuiAction", "view_recurring");
+            }
 
             inventory.setItem(slot, tournamentItem);
+
+            // Add instance buttons
+            if (slot < 45) { // Make sure we have room for instance buttons
+                addRecurringInstanceButtons(inventory, tournament, slot, player);
+            }
+
             slot++;
         }
 
@@ -1160,6 +1303,18 @@ public class TournamentMainGUI {
             }
 
             inventory.setItem(slot, tournamentItem);
+
+            // Add start button if player is host and tournament is in WAITING state
+            if (tournament.getStatus() == Tournament.TournamentStatus.WAITING &&
+                    player.getUUID().equals(tournament.getHostId())) {
+                // Add a start button next to the tournament
+                int startButtonSlot = slot + 1;
+                if (startButtonSlot < inventory.getContainerSize()) {
+                    TournamentGuiHandler.addStartButtonIfHost(inventory, tournament, player, startButtonSlot);
+                    slot++; // Increment slot to account for the added button
+                }
+            }
+
             slot++;
         }
 
@@ -1403,6 +1558,62 @@ public class TournamentMainGUI {
                 return;
             }
 
+            // Add handling for viewing recurring tournament instances
+            if ("view_recurring_instances".equals(action)) {
+                if (recurringId != null) {
+                    // Get active instances of this recurring tournament
+                    List<String> instances = findRecurringTournamentInstances(recurringId);
+
+                    if (!instances.isEmpty()) {
+                        player.sendMessage(
+                                new StringTextComponent("Active instances of recurring tournament " + recurringId + ":")
+                                        .withStyle(TextFormatting.GOLD),
+                                player.getUUID());
+
+                        for (String instanceName : instances) {
+                            Tournament instance = TournamentManager.getInstance().getTournament(instanceName);
+                            if (instance != null) {
+                                TextFormatting color;
+                                switch (instance.getStatus()) {
+                                    case WAITING:
+                                        color = TextFormatting.GREEN;
+                                        break;
+                                    case IN_PROGRESS:
+                                        color = TextFormatting.GOLD;
+                                        break;
+                                    default:
+                                        color = TextFormatting.RED;
+                                }
+
+                                player.sendMessage(
+                                        new StringTextComponent("- " + instanceName + " (" +
+                                                instance.getParticipantCount() + "/" + instance.getMaxParticipants() +
+                                                ") [" + instance.getStatus() + "]")
+                                                .withStyle(color),
+                                        player.getUUID());
+
+                                // If tournament is waiting, add instructions to join
+                                if (instance.getStatus() == Tournament.TournamentStatus.WAITING) {
+                                    player.sendMessage(
+                                            new StringTextComponent("  Type /tournament join " + instanceName + " to join this tournament")
+                                                    .withStyle(TextFormatting.YELLOW),
+                                            player.getUUID());
+                                }
+                            }
+                        }
+                    } else {
+                        player.sendMessage(
+                                new StringTextComponent("No active instances found for recurring tournament " + recurringId)
+                                        .withStyle(TextFormatting.RED),
+                                player.getUUID());
+                    }
+                }
+
+                // Reopen main GUI
+                openMainGui(player);
+                return;
+            }
+
             switch (action) {
                 case "join":
                     if (tournamentName != null) {
@@ -1435,11 +1646,20 @@ public class TournamentMainGUI {
 
                 case "start":
                     Tournament playerTournament = manager.getPlayerTournament(player);
-                    if (playerTournament != null &&
-                            player.getUUID().equals(playerTournament.getHostId()) &&
-                            playerTournament.getStatus() == Tournament.TournamentStatus.WAITING) {
 
-                        playerTournament.start();
+                    // If tournament name is provided, find that tournament instead of the player's tournament
+                    Tournament tournamentToStart = null;
+                    if (tournamentName != null) {
+                        tournamentToStart = manager.getTournament(tournamentName);
+                    } else if (playerTournament != null) {
+                        tournamentToStart = playerTournament;
+                    }
+
+                    if (tournamentToStart != null &&
+                            player.getUUID().equals(tournamentToStart.getHostId()) &&
+                            tournamentToStart.getStatus() == Tournament.TournamentStatus.WAITING) {
+
+                        tournamentToStart.start();
                         player.sendMessage(
                                 new StringTextComponent("Tournament started!")
                                         .withStyle(TextFormatting.GREEN),
