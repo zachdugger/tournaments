@@ -128,12 +128,16 @@ public class RecurringTournament {
             extraSettings.putString("recurringId", name);
             manager.setTournamentExtraSettings(uniqueName, extraSettings);
 
-            Tournaments.LOGGER.info("Created recurring tournament instance: {} (template: {})", uniqueName, name);
+            // Set a scheduled start time - 10 minutes after creation
+            manager.setTournamentScheduledStart(uniqueName, 0.16); // 0.16 hours = about 10 minutes
 
-            // Broadcast message to all online players
+            Tournaments.LOGGER.info("Created recurring tournament instance: {} (template: {}) - scheduled to start in 10 minutes",
+                    uniqueName, name);
+
+            // Broadcast message to all online players - single consolidated message
             net.minecraftforge.fml.server.ServerLifecycleHooks.getCurrentServer().getPlayerList().getPlayers().forEach(
                     player -> player.sendMessage(
-                            new net.minecraft.util.text.StringTextComponent("New tournament started: " + uniqueName)
+                            new net.minecraft.util.text.StringTextComponent("New tournament started: " + uniqueName + " (starts in 10 minutes, type /tournament join " + uniqueName + " to join)")
                                     .withStyle(net.minecraft.util.text.TextFormatting.GREEN),
                             player.getUUID()
                     )

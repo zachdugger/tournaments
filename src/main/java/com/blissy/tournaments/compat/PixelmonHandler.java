@@ -155,7 +155,7 @@ public class PixelmonHandler {
             }
         }
 
-        Tournaments.LOGGER.info("Checking Pokémon status for match: {} vs {}",
+        Tournaments.LOGGER.info("Checking Pokemon status for match: {} vs {}",
                 match.getPlayer1Name(), match.getPlayer2Name());
 
         // Check if we can determine a winner based on fainted Pokémon
@@ -167,13 +167,13 @@ public class PixelmonHandler {
 
         // Check player 1's Pokémon
         if (player1 != null) {
-            Tournaments.LOGGER.info("Checking Pokémon for {}", match.getPlayer1Name());
+            Tournaments.LOGGER.info("Checking Pokemon for {}", match.getPlayer1Name());
             Pokemon[] player1Pokemon = StorageProxy.getParty(player1.getUUID()).getAll();
 
             for (Pokemon pokemon : player1Pokemon) {
                 if (pokemon != null) {
                     boolean isFainted = pokemon.isFainted();
-                    Tournaments.LOGGER.info("  Pokémon: {} - Fainted: {}",
+                    Tournaments.LOGGER.info("  Pokemon: {} - Fainted: {}",
                             pokemon.getDisplayName(), isFainted);
 
                     if (!isFainted) {
@@ -182,18 +182,18 @@ public class PixelmonHandler {
                 }
             }
 
-            Tournaments.LOGGER.info("Player1 all Pokémon fainted: {}", player1AllFainted);
+            Tournaments.LOGGER.info("Player1 all Pokemon fainted: {}", player1AllFainted);
         }
 
         // Check player 2's Pokémon
         if (player2 != null) {
-            Tournaments.LOGGER.info("Checking Pokémon for {}", match.getPlayer2Name());
+            Tournaments.LOGGER.info("Checking Pokemon for {}", match.getPlayer2Name());
             Pokemon[] player2Pokemon = StorageProxy.getParty(player2.getUUID()).getAll();
 
             for (Pokemon pokemon : player2Pokemon) {
                 if (pokemon != null) {
                     boolean isFainted = pokemon.isFainted();
-                    Tournaments.LOGGER.info("  Pokémon: {} - Fainted: {}",
+                    Tournaments.LOGGER.info("  Pokemon: {} - Fainted: {}",
                             pokemon.getDisplayName(), isFainted);
 
                     if (!isFainted) {
@@ -202,7 +202,7 @@ public class PixelmonHandler {
                 }
             }
 
-            Tournaments.LOGGER.info("Player2 all Pokémon fainted: {}", player2AllFainted);
+            Tournaments.LOGGER.info("Player2 all Pokemon fainted: {}", player2AllFainted);
         }
 
         // Determine winner based on fainted status
@@ -210,12 +210,12 @@ public class PixelmonHandler {
             // Player 1 lost, Player 2 won
             winnerId = match.getPlayer2Id();
             loserId = match.getPlayer1Id();
-            Tournaments.LOGGER.info("WINNER DETERMINED: {} (opponent's Pokémon all fainted)", match.getPlayer2Name());
+            Tournaments.LOGGER.info("WINNER DETERMINED: {} (opponent's Pokemon all fainted)", match.getPlayer2Name());
         } else if (!player1AllFainted && player2AllFainted) {
             // Player 2 lost, Player 1 won
             winnerId = match.getPlayer1Id();
             loserId = match.getPlayer2Id();
-            Tournaments.LOGGER.info("WINNER DETERMINED: {} (opponent's Pokémon all fainted)", match.getPlayer1Name());
+            Tournaments.LOGGER.info("WINNER DETERMINED: {} (opponent's Pokemon all fainted)", match.getPlayer1Name());
         } else if (player1 != null && player2 == null) {
             // Player 2 is offline, player 1 wins
             winnerId = match.getPlayer1Id();
@@ -435,7 +435,7 @@ public class PixelmonHandler {
             // Check if the player has any Pokémon
             if (playerPokemon == null || playerPokemon.length == 0) {
                 player.sendMessage(
-                        new StringTextComponent("You don't have any Pokémon in your party")
+                        new StringTextComponent("You don't have any Pokemon in your party")
                                 .withStyle(TextFormatting.RED),
                         player.getUUID());
                 return false;
@@ -456,7 +456,7 @@ public class PixelmonHandler {
                     validCount++;
                 } else {
                     player.sendMessage(
-                            new StringTextComponent("Your Pokémon " + p.getDisplayName() +
+                            new StringTextComponent("Your Pokemon " + p.getDisplayName() +
                                     " (Level " + p.getPokemonLevel() +
                                     ") does not meet tournament level requirements " +
                                     "(" + settings.getMinLevel() + "-" + settings.getMaxLevel() + ")")
@@ -468,7 +468,7 @@ public class PixelmonHandler {
             // Player needs at least one valid Pokémon to join
             if (validCount == 0) {
                 player.sendMessage(
-                        new StringTextComponent("None of your Pokémon meet the tournament level requirements " +
+                        new StringTextComponent("None of your Pokemon meet the tournament level requirements " +
                                 "(" + settings.getMinLevel() + "-" + settings.getMaxLevel() + ")")
                                 .withStyle(TextFormatting.RED),
                         player.getUUID());
@@ -477,9 +477,9 @@ public class PixelmonHandler {
 
             return true;
         } catch (Exception e) {
-            Tournaments.LOGGER.error("Error validating player Pokémon", e);
+            Tournaments.LOGGER.error("Error validating player Pokemon", e);
             player.sendMessage(
-                    new StringTextComponent("Error checking your Pokémon. Please try again.")
+                    new StringTextComponent("Error checking your Pokemon. Please try again.")
                             .withStyle(TextFormatting.RED),
                     player.getUUID());
             return false;
@@ -515,16 +515,16 @@ public class PixelmonHandler {
 
             if (p1AllPokemon.length == 0 || p2AllPokemon.length == 0) {
                 player1.sendMessage(
-                        new StringTextComponent("Cannot start battle - one or both players have no Pokémon")
+                        new StringTextComponent("Cannot start battle - one or both players have no Pokemon")
                                 .withStyle(TextFormatting.RED),
                         player1.getUUID());
 
                 player2.sendMessage(
-                        new StringTextComponent("Cannot start battle - one or both players have no Pokémon")
+                        new StringTextComponent("Cannot start battle - one or both players have no Pokemon")
                                 .withStyle(TextFormatting.RED),
                         player2.getUUID());
 
-                Tournaments.LOGGER.error("Cannot start battle - one or both players have no Pokémon");
+                Tournaments.LOGGER.error("Cannot start battle - one or both players have no Pokemon");
                 return;
             }
 
@@ -693,7 +693,7 @@ public class PixelmonHandler {
 
             if (!settings.isValidPokemonLevel(p.getPokemonLevel())) {
                 player.sendMessage(
-                        new StringTextComponent("Your Pokémon " + p.getDisplayName() +
+                        new StringTextComponent("Your Pokemon " + p.getDisplayName() +
                                 " (Level " + p.getPokemonLevel() +
                                 ") does not meet tournament level requirements " +
                                 "(" + settings.getMinLevel() + "-" + settings.getMaxLevel() + ")")

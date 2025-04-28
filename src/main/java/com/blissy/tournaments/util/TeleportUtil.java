@@ -116,8 +116,13 @@ public class TeleportUtil {
         }
 
         // Try to load from saved data first, then config
-        String positionKey = "match_position_" + position;
+        String positionKey = "tournament_match_pos" + position;
         TeleportLocation matchLocation = loadLocationFromServerData(positionKey);
+
+        if (matchLocation == null) {
+            // Try legacy key format
+            matchLocation = loadLocationFromServerData("match_position_" + position);
+        }
 
         if (matchLocation == null) {
             // Use entry location offset as fallback
@@ -138,7 +143,7 @@ public class TeleportUtil {
                     position, matchLocation.x, matchLocation.y, matchLocation.z);
         }
 
-        // Teleport the player
+        // Teleport the player - don't send a message here, it's included in the match announcement
         return teleportPlayer(player, matchLocation);
     }
 

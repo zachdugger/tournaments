@@ -117,7 +117,7 @@ public class TournamentGuiHandler {
                 // Have player type min level in chat
                 player.closeContainer();
                 player.sendMessage(
-                        new StringTextComponent("Please type the minimum Pokémon level (1-100) in chat (type 'cancel' to cancel):")
+                        new StringTextComponent("Please type the minimum Pokemon level (1-100) in chat (type 'cancel' to cancel):")
                                 .withStyle(TextFormatting.AQUA),
                         player.getUUID());
                 player.getPersistentData().putBoolean("WaitingForMinLevel", true);
@@ -126,7 +126,7 @@ public class TournamentGuiHandler {
                 // Have player type max level in chat
                 player.closeContainer();
                 player.sendMessage(
-                        new StringTextComponent("Please type the maximum Pokémon level (1-100) in chat (type 'cancel' to cancel):")
+                        new StringTextComponent("Please type the maximum Pokemon level (1-100) in chat (type 'cancel' to cancel):")
                                 .withStyle(TextFormatting.BLUE),
                         player.getUUID());
                 player.getPersistentData().putBoolean("WaitingForMaxLevel", true);
@@ -230,7 +230,7 @@ public class TournamentGuiHandler {
                 // Have player type min level in chat
                 player.closeContainer();
                 player.sendMessage(
-                        new StringTextComponent("Please type the minimum Pokémon level (1-100) in chat (type 'cancel' to cancel):")
+                        new StringTextComponent("Please type the minimum Pokemon level (1-100) in chat (type 'cancel' to cancel):")
                                 .withStyle(TextFormatting.AQUA),
                         player.getUUID());
                 player.getPersistentData().putBoolean("WaitingForRecurringMinLevel", true);
@@ -239,7 +239,7 @@ public class TournamentGuiHandler {
                 // Have player type max level in chat
                 player.closeContainer();
                 player.sendMessage(
-                        new StringTextComponent("Please type the maximum Pokémon level (1-100) in chat (type 'cancel' to cancel):")
+                        new StringTextComponent("Please type the maximum Pokemon level (1-100) in chat (type 'cancel' to cancel):")
                                 .withStyle(TextFormatting.BLUE),
                         player.getUUID());
                 player.getPersistentData().putBoolean("WaitingForRecurringMaxLevel", true);
@@ -308,10 +308,10 @@ public class TournamentGuiHandler {
         if (canPlayerStartTournament(player, tournament)) {
             ItemStack startButton = new ItemStack(Items.BEACON);
             startButton.setHoverName(new StringTextComponent("Start Tournament")
-                    .withStyle(TextFormatting.GOLD, TextFormatting.BOLD));
+                    .withStyle(TextFormatting.GREEN, TextFormatting.BOLD));
 
             List<ITextComponent> startLore = new ArrayList<>();
-            startLore.add(new StringTextComponent("Click to start this tournament")
+            startLore.add(new StringTextComponent("Click to start this tournament now!")
                     .withStyle(TextFormatting.YELLOW));
             setItemLore(startButton, startLore);
 
@@ -321,6 +321,8 @@ public class TournamentGuiHandler {
 
             // Place the start button
             inventory.setItem(slot, startButton);
+            Tournaments.LOGGER.info("Start button added for tournament {} in slot {}",
+                    tournament.getName(), slot);
         }
     }
 

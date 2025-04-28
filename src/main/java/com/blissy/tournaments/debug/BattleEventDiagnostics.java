@@ -37,11 +37,11 @@ public class BattleEventDiagnostics {
                     // Log player's Pokémon from storage, since we can't access allPokemon directly
                     ServerPlayerEntity player = playerParticipant.player;
                     Pokemon[] pokemon = StorageProxy.getParty(player.getUUID()).getAll();
-                    Tournaments.LOGGER.info("  Pokémon count: {}", pokemon.length);
+                    Tournaments.LOGGER.info("  Pokemon count: {}", pokemon.length);
                     for (int j = 0; j < pokemon.length; j++) {
                         Pokemon p = pokemon[j];
                         if (p != null) {
-                            Tournaments.LOGGER.info("  Pokémon {}: {}, Level {}, Fainted: {}",
+                            Tournaments.LOGGER.info("  Pokemon {}: {}, Level {}, Fainted: {}",
                                     j, p.getDisplayName(), p.getPokemonLevel(), p.isFainted());
                         }
                     }
@@ -62,11 +62,11 @@ public class BattleEventDiagnostics {
                     // Log player's Pokémon from storage
                     ServerPlayerEntity player = playerParticipant.player;
                     Pokemon[] pokemon = StorageProxy.getParty(player.getUUID()).getAll();
-                    Tournaments.LOGGER.info("  Pokémon count: {}", pokemon.length);
+                    Tournaments.LOGGER.info("  Pokemon count: {}", pokemon.length);
                     for (int j = 0; j < pokemon.length; j++) {
                         Pokemon p = pokemon[j];
                         if (p != null) {
-                            Tournaments.LOGGER.info("  Pokémon {}: {}, Level {}, Fainted: {}",
+                            Tournaments.LOGGER.info("  Pokemon {}: {}, Level {}, Fainted: {}",
                                     j, p.getDisplayName(), p.getPokemonLevel(), p.isFainted());
                         }
                     }
@@ -106,11 +106,11 @@ public class BattleEventDiagnostics {
                     // Log player's current Pokémon state from storage
                     ServerPlayerEntity player = playerParticipant.player;
                     Pokemon[] pokemon = StorageProxy.getParty(player.getUUID()).getAll();
-                    Tournaments.LOGGER.info("Current party Pokémon for {}", player.getName().getString());
+                    Tournaments.LOGGER.info("Current party Pokemon for {}", player.getName().getString());
                     for (int i = 0; i < pokemon.length; i++) {
                         Pokemon p = pokemon[i];
                         if (p != null) {
-                            Tournaments.LOGGER.info("  Pokémon {}: {}, Level {}, Fainted: {}",
+                            Tournaments.LOGGER.info("  Pokemon {}: {}, Level {}, Fainted: {}",
                                     i, p.getDisplayName(), p.getPokemonLevel(), p.isFainted());
                         }
                     }

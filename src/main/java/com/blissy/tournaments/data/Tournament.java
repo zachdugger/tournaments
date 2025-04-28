@@ -277,21 +277,31 @@ public class Tournament {
                 ServerPlayerEntity p2 = player2.getPlayer();
 
                 if (p1 != null && p2 != null) {
-                    // Notify players about their match
+                    // Teleport players to their match positions
+                    boolean p1Teleported = TeleportUtil.teleportToMatchPosition(p1, 1);
+                    boolean p2Teleported = TeleportUtil.teleportToMatchPosition(p2, 2);
+
+                    if (p1Teleported && p2Teleported) {
+                        Tournaments.LOGGER.info("Teleported {} and {} to their match positions",
+                                p1.getName().getString(), p2.getName().getString());
+                    } else {
+                        Tournaments.LOGGER.warn("Failed to teleport players to match positions");
+                    }
+
+                    // Notify players about their match - single consolidated message
                     p1.sendMessage(
-                            new StringTextComponent("You have been matched against " + p2.getName().getString() +
-                                    ". Type /tournament ready when you are ready to battle!")
+                            new StringTextComponent("Match started against " + p2.getName().getString() +
+                                    ". You've been teleported to your match position. Type /tournament ready when ready!")
                                     .withStyle(TextFormatting.GOLD),
                             p1.getUUID());
 
                     p2.sendMessage(
-                            new StringTextComponent("You have been matched against " + p1.getName().getString() +
-                                    ". Type /tournament ready when you are ready to battle!")
+                            new StringTextComponent("Match started against " + p1.getName().getString() +
+                                    ". You've been teleported to your match position. Type /tournament ready when ready!")
                                     .withStyle(TextFormatting.GOLD),
                             p2.getUUID());
 
-                    broadcastMessage("Match scheduled: " + match.getDescription() +
-                            " - Players must type /tournament ready to begin");
+                    broadcastMessage("Match scheduled: " + match.getDescription());
                 } else {
                     broadcastMessage("Could not schedule match: " + match.getDescription() +
                             " - one or both players offline");
@@ -347,12 +357,13 @@ public class Tournament {
                         Tournaments.LOGGER.error("Delayed teleport for eliminated player {} also failed", playerName);
                         player.sendMessage(
                                 new net.minecraft.util.text.StringTextComponent(
-                                        "Failed to teleport you to the exit point. Please contact an administrator.")
+                                        "You have been eliminated from the tournament. You can use /spawn to return to spawn.")
                                         .withStyle(net.minecraft.util.text.TextFormatting.RED),
                                 player.getUUID());
                     }
                 }));
             } else {
+                // Only send one message for elimination
                 player.sendMessage(
                         new net.minecraft.util.text.StringTextComponent("You have been eliminated from the tournament!")
                                 .withStyle(net.minecraft.util.text.TextFormatting.RED),
@@ -366,8 +377,8 @@ public class Tournament {
                     player.getUUID());
         }
 
-        // Broadcast elimination message
-        broadcastMessage(playerName + " has been eliminated from the tournament.");
+        // Broadcast elimination message - consolidated with match result in recordMatchResult
+        // No need for a separate broadcast here
 
         // Check if only one active player remains
         int activePlayersRemaining = participants.size() - eliminatedPlayers.size();
@@ -462,22 +473,36 @@ public class Tournament {
             // Update participant stats
             if (participants.containsKey(winnerUUID)) {
                 participants.get(winnerUUID).incrementWins();
+
+                // Teleport winner back to entry point
+                ServerPlayerEntity winner = participants.get(winnerUUID).getPlayer();
+                if (winner != null && TournamentsConfig.COMMON.enableTeleports.get()) {
+                    boolean teleported = TeleportUtil.teleportToEntryPoint(winner);
+                    if (teleported) {
+                        Tournaments.LOGGER.info("Teleported winner {} back to entry point",
+                                winner.getName().getString());
+                        winner.sendMessage(
+                                new StringTextComponent("You won! You've been teleported back to the tournament area.")
+                                        .withStyle(TextFormatting.GREEN),
+                                winner.getUUID());
+                    }
+                }
             }
+
             if (participants.containsKey(loserUUID)) {
                 participants.get(loserUUID).incrementLosses();
 
-                // Mark the loser as eliminated - now handled in PixelmonHandler
-                // to ensure proper teleportation
-                // eliminatePlayer(loserUUID);
+                // Eliminate the loser - handled separately to ensure proper teleporting
+                eliminatePlayer(loserUUID);
             }
 
-            // Broadcast result
+            // Broadcast the result - single broadcast message
             String winnerName = participants.containsKey(winnerUUID) ?
                     participants.get(winnerUUID).getPlayerName() : "Unknown";
             String loserName = participants.containsKey(loserUUID) ?
                     participants.get(loserUUID).getPlayerName() : "Unknown";
 
-            // We don't broadcast here since PixelmonHandler does it
+            broadcastMessage(winnerName + " has defeated " + loserName + " and advances to the next round!");
 
             // Check if round is complete
             checkRoundCompletion();
@@ -503,42 +528,18 @@ public class Tournament {
         }
 
         if (allCompleted) {
+            Tournaments.LOGGER.info("All matches in round {} completed, advancing to next round", currentRound + 1);
             advanceRound();
+        } else {
+            Tournaments.LOGGER.info("Some matches still in progress, not advancing round yet");
         }
     }
 
-    /**
-     * Advance to next round or end tournament
-     */
     public void advanceRound() {
         // Determine winners from current round
-        List<TournamentParticipant> winners = determineRoundWinners();
-
-        // If only one winner, end tournament
-        if (winners.size() <= 1) {
-            end();
-            return;
-        }
-
-        // Add winners to next round
-        brackets.add(winners);
-        currentRound++;
-
-        broadcastMessage("Advancing to Round " + (currentRound + 1) +
-                ". Remaining participants: " + winners.size());
-
-        // Schedule next round matches
-        scheduleCurrentRoundMatches();
-    }
-
-    /**
-     * Determine winners for the current round
-     */
-    private List<TournamentParticipant> determineRoundWinners() {
-        List<TournamentParticipant> currentRoundBracket = brackets.get(currentRound);
         List<TournamentParticipant> winners = new ArrayList<>();
 
-        // Get winners from completed matches
+        // Get winners from completed matches - this is the fixed determineRoundWinners implementation
         for (TournamentMatch match : matches) {
             if (match.getStatus() == TournamentMatch.MatchStatus.COMPLETED) {
                 UUID winnerId = match.getWinnerId();
@@ -549,6 +550,7 @@ public class Tournament {
         }
 
         // Add byes (participants without matches)
+        List<TournamentParticipant> currentRoundBracket = brackets.get(currentRound);
         for (TournamentParticipant participant : currentRoundBracket) {
             boolean hasMatch = false;
             for (TournamentMatch match : matches) {
@@ -564,7 +566,27 @@ public class Tournament {
             }
         }
 
-        return winners;
+        // If only one winner, end tournament
+        if (winners.size() <= 1) {
+            end();
+            return;
+        }
+
+        // Add winners to next round
+        brackets.add(winners);
+        currentRound++;
+
+        broadcastMessage("Advancing to Round " + (currentRound + 1) +
+                ". Remaining participants: " + winners.size());
+
+        // Schedule next round matches with a short delay
+        // Use a delayed task to give time for teleportation to complete
+        net.minecraftforge.fml.server.ServerLifecycleHooks.getCurrentServer().tell(
+                new net.minecraft.util.concurrent.TickDelayedTask(20, () -> {
+                    scheduleCurrentRoundMatches();
+                    Tournaments.LOGGER.info("Scheduled matches for round {}", currentRound + 1);
+                })
+        );
     }
 
     /**

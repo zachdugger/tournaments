@@ -6,6 +6,7 @@ import com.blissy.tournaments.config.TournamentsConfig;
 import com.blissy.tournaments.data.Tournament;
 import com.blissy.tournaments.data.TournamentMatch;
 import com.blissy.tournaments.data.TournamentParticipant;
+import com.blissy.tournaments.util.TeleportUtil;
 import net.minecraft.entity.player.ServerPlayerEntity;
 import net.minecraft.util.text.StringTextComponent;
 import net.minecraft.util.text.TextFormatting;
@@ -147,54 +148,15 @@ public class BattleTimeoutChecker {
         boolean resultRecorded = tournament.recordMatchResult(winnerId, loserId);
 
         if (resultRecorded) {
-            // Update ELO ratings
-            Tournaments.ELO_MANAGER.recordMatch(winnerId, loserId);
-
-            // Eliminate the loser
-            tournament.eliminatePlayer(loserId);
-
-            // Notify players if they're online
-            if (player1 != null && player2 == null) {
-                player1.sendMessage(
-                        new StringTextComponent("Your match timed out but your opponent was offline. You win by default!")
-                                .withStyle(TextFormatting.GREEN),
-                        player1.getUUID());
-            } else if (player1 == null && player2 != null) {
-                player2.sendMessage(
-                        new StringTextComponent("Your match timed out but your opponent was offline. You win by default!")
-                                .withStyle(TextFormatting.GREEN),
-                        player2.getUUID());
-            } else if (player1 != null && player2 != null) {
-                // Both online
-                if (winnerId.equals(match.getPlayer1Id())) {
-                    player1.sendMessage(
-                            new StringTextComponent("Your match timed out and was decided by the system. You win!")
-                                    .withStyle(TextFormatting.GREEN),
-                            player1.getUUID());
-                    player2.sendMessage(
-                            new StringTextComponent("Your match timed out and was decided by the system. You lose!")
-                                    .withStyle(TextFormatting.RED),
-                            player2.getUUID());
-                } else {
-                    player2.sendMessage(
-                            new StringTextComponent("Your match timed out and was decided by the system. You win!")
-                                    .withStyle(TextFormatting.GREEN),
-                            player2.getUUID());
-                    player1.sendMessage(
-                            new StringTextComponent("Your match timed out and was decided by the system. You lose!")
-                                    .withStyle(TextFormatting.RED),
-                            player1.getUUID());
-                }
-            }
-
-            // Broadcast the result
-            tournament.broadcastMessage("Match between " + winnerName + " and " + loserName +
-                    " timed out. " + winnerName + " advances!");
+            // Match completion is now fully handled in recordMatchResult, including:
+            // - ELO updates
+            // - Player elimination
+            // - Teleportation
+            // - Notification
 
             Tournaments.LOGGER.info("Successfully resolved stuck match: {} wins", winnerName);
         } else {
             Tournaments.LOGGER.error("Failed to record result for stuck match: {} vs {}",
                     match.getPlayer1Name(), match.getPlayer2Name());
         }
-    }
-}
+    }}

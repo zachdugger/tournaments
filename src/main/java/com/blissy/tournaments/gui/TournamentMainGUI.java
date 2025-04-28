@@ -284,8 +284,12 @@ public class TournamentMainGUI {
 
             // UUID is required for proper skin lookup
             UUID playerUUID = topPlayerElo.getPlayerId();
-            int[] uuidArray = uuidToIntArray(playerUUID);
-            skullOwner.putIntArray("Id", uuidArray);
+
+            // Store UUID in NBT using the correct format for Minecraft 1.16.5
+            CompoundNBT id = new CompoundNBT();
+            id.putLong("M", playerUUID.getMostSignificantBits());
+            id.putLong("L", playerUUID.getLeastSignificantBits());
+            skullOwner.put("Id", id);
 
             CompoundNBT tag = playerHead.getOrCreateTag();
             tag.put("SkullOwner", skullOwner);
@@ -324,17 +328,6 @@ public class TournamentMainGUI {
 
         // Add in-progress tournament displays
         addInProgressDisplays(inventory, config);
-    }
-
-    private static int[] uuidToIntArray(UUID uuid) {
-        long mostSigBits = uuid.getMostSignificantBits();
-        long leastSigBits = uuid.getLeastSignificantBits();
-        return new int[] {
-                (int)(mostSigBits >> 32),
-                (int)mostSigBits,
-                (int)(leastSigBits >> 32),
-                (int)leastSigBits
-        };
     }
 
     /**
@@ -1011,8 +1004,13 @@ public class TournamentMainGUI {
                 // Add a start button next to the tournament
                 int startButtonSlot = slot + 1;
                 if (startButtonSlot < inventory.getContainerSize()) {
+                    Tournaments.LOGGER.info("Adding start button for tournament {} in slot {}",
+                            tournament.getName(), startButtonSlot);
                     TournamentGuiHandler.addStartButtonIfHost(inventory, tournament, player, startButtonSlot);
                     slot++; // Increment slot to account for the added button
+                } else {
+                    Tournaments.LOGGER.warn("Cannot add start button - slot {} is outside inventory bounds",
+                            startButtonSlot);
                 }
             }
         }
@@ -1310,8 +1308,13 @@ public class TournamentMainGUI {
                 // Add a start button next to the tournament
                 int startButtonSlot = slot + 1;
                 if (startButtonSlot < inventory.getContainerSize()) {
+                    Tournaments.LOGGER.info("Adding start button for tournament {} in slot {}",
+                            tournament.getName(), startButtonSlot);
                     TournamentGuiHandler.addStartButtonIfHost(inventory, tournament, player, startButtonSlot);
                     slot++; // Increment slot to account for the added button
+                } else {
+                    Tournaments.LOGGER.warn("Cannot add start button - slot {} is outside inventory bounds",
+                            startButtonSlot);
                 }
             }
 
