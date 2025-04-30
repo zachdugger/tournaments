@@ -15,6 +15,7 @@ import com.blissy.tournaments.gui.TournamentMainGUI;
 import com.blissy.tournaments.gui.TournamentRecurringCreationGUI;
 import com.blissy.tournaments.handlers.RecurringTournamentHandler;
 import com.blissy.tournaments.elo.EloManager;
+import com.blissy.tournaments.util.BroadcastUtil;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.DoubleArgumentType;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
@@ -56,41 +57,30 @@ public class TournamentCommands {
                             TournamentMainGUI.openMainGui(player);
                             return 1;
                         })
-                        .then(Commands.literal("join")
-                                .then(Commands.argument("name", StringArgumentType.string())
-                                        .executes(context -> {
-                                            ServerPlayerEntity player = context.getSource().getPlayerOrException();
-                                            String tournamentName = StringArgumentType.getString(context, "name");
+                        .then(Commands.argument("name", StringArgumentType.string())
+                                .executes(context -> {
+                                    ServerPlayerEntity player = context.getSource().getPlayerOrException();
+                                    String tournamentName = StringArgumentType.getString(context, "name");
 
-                                            if (TournamentManager.getInstance().joinTournament(tournamentName, player)) {
-                                                player.sendMessage(
-                                                        new StringTextComponent("Successfully joined tournament: " + tournamentName)
-                                                                .withStyle(TextFormatting.GREEN),
-                                                        player.getUUID());
-                                            } else {
-                                                player.sendMessage(
-                                                        new StringTextComponent("Failed to join tournament: " + tournamentName)
-                                                                .withStyle(TextFormatting.RED),
-                                                        player.getUUID());
-                                            }
-                                            return 1;
-                                        })
-                                )
+                                    if (TournamentManager.getInstance().joinTournament(tournamentName, player)) {
+                                        // Tournament join success is already handled in TournamentManager.joinTournament
+                                    } else {
+                                        // CHANGED FROM CHAT TO TITLE
+                                        BroadcastUtil.sendTitle(player, "Cannot Join", TextFormatting.RED, 10, 60, 20);
+                                        BroadcastUtil.sendSubtitle(player, "Tournament: " + tournamentName, TextFormatting.RED, 10, 60, 20);
+                                    }
+                                    return 1;
+                                })
                         )
                         .then(Commands.literal("leave")
                                 .executes(context -> {
                                     ServerPlayerEntity player = context.getSource().getPlayerOrException();
 
                                     if (TournamentManager.getInstance().leaveTournament(player)) {
-                                        player.sendMessage(
-                                                new StringTextComponent("Successfully left tournament")
-                                                        .withStyle(TextFormatting.GREEN),
-                                                player.getUUID());
+                                        // Leave message already handled in TournamentManager.leaveTournament
                                     } else {
-                                        player.sendMessage(
-                                                new StringTextComponent("You are not in a tournament")
-                                                        .withStyle(TextFormatting.RED),
-                                                player.getUUID());
+                                        // CHANGED FROM CHAT TO TITLE
+                                        BroadcastUtil.sendTitle(player, "Not In Tournament", TextFormatting.RED, 10, 60, 20);
                                     }
                                     return 1;
                                 })
@@ -101,39 +91,35 @@ public class TournamentCommands {
                                     Map<String, Tournament> tournaments = TournamentManager.getInstance().getAllTournaments();
 
                                     if (tournaments.isEmpty()) {
-                                        player.sendMessage(
-                                                new StringTextComponent("No active tournaments")
-                                                        .withStyle(TextFormatting.YELLOW),
-                                                player.getUUID());
+                                        // CHANGED FROM CHAT TO TITLE
+                                        BroadcastUtil.sendTitle(player, "No Tournaments", TextFormatting.YELLOW, 10, 60, 20);
+                                        BroadcastUtil.sendSubtitle(player, "No active tournaments found", TextFormatting.YELLOW, 10, 60, 20);
                                     } else {
-                                        player.sendMessage(
-                                                new StringTextComponent("Active Tournaments:")
-                                                        .withStyle(TextFormatting.GOLD),
-                                                player.getUUID());
+                                        // Show tournament count in title
+                                        BroadcastUtil.sendTitle(player, "Active Tournaments", TextFormatting.GOLD, 10, 60, 20);
+                                        BroadcastUtil.sendSubtitle(player, tournaments.size() + " tournaments running", TextFormatting.YELLOW, 10, 60, 20);
 
+                                        // Show first tournament in action bar
+                                        // For multiple tournaments, use delayed tasks to show each one
+                                        int delay = 0;
                                         for (Tournament tournament : tournaments.values()) {
-                                            TextFormatting color;
-                                            switch (tournament.getStatus()) {
-                                                case WAITING:
-                                                    color = TextFormatting.GREEN;
-                                                    break;
-                                                case IN_PROGRESS:
-                                                    color = TextFormatting.GOLD;
-                                                    break;
-                                                case ENDED:
-                                                    color = TextFormatting.RED;
-                                                    break;
-                                                default:
-                                                    color = TextFormatting.WHITE;
-                                            }
-
-                                            player.sendMessage(
-                                                    new StringTextComponent("- " + tournament.getName() +
-                                                            " (" + tournament.getParticipantCount() + "/" +
-                                                            tournament.getMaxParticipants() + ") [" +
-                                                            tournament.getStatus() + "]")
-                                                            .withStyle(color),
-                                                    player.getUUID());
+                                            final Tournament t = tournament;
+                                            player.getServer().tell(new net.minecraft.util.concurrent.TickDelayedTask(
+                                                    delay,
+                                                    () -> {
+                                                        TextFormatting color;
+                                                        switch (t.getStatus()) {
+                                                            case WAITING: color = TextFormatting.GREEN; break;
+                                                            case IN_PROGRESS: color = TextFormatting.GOLD; break;
+                                                            case ENDED: color = TextFormatting.RED; break;
+                                                            default: color = TextFormatting.WHITE;
+                                                        }
+                                                        BroadcastUtil.sendActionBar(player,
+                                                                t.getName() + " (" + t.getParticipantCount() + "/" +
+                                                                        t.getMaxParticipants() + ") [" + t.getStatus() + "]", color);
+                                                    }
+                                            ));
+                                            delay += 40; // 2 second delay between tournaments
                                         }
                                     }
                                     return 1;
@@ -336,6 +322,26 @@ public class TournamentCommands {
                                             return 1;
                                         })
                                 )
+                        )
+                        .then(Commands.literal("start")
+                                .executes(context -> {
+                                    ServerPlayerEntity player = context.getSource().getPlayerOrException();
+                                    Tournament playerTournament = TournamentManager.getInstance().getPlayerTournament(player);
+
+                                    if (playerTournament != null &&
+                                            player.getUUID().equals(playerTournament.getHostId()) &&
+                                            playerTournament.getStatus() == Tournament.TournamentStatus.WAITING) {
+
+                                        playerTournament.start();
+                                        // CHANGED FROM CHAT TO NOTIFICATION
+                                        BroadcastUtil.sendNotificationBar(player, "Tournament Started!");
+                                    } else {
+                                        // CHANGED FROM CHAT TO TITLE
+                                        BroadcastUtil.sendTitle(player, "Cannot Start", TextFormatting.RED, 10, 60, 20);
+                                        BroadcastUtil.sendSubtitle(player, "You cannot start this tournament", TextFormatting.RED, 10, 60, 20);
+                                    }
+                                    return 1;
+                                })
                         )
                         .then(Commands.literal("debug")
                                 .requires(source -> source.hasPermission(2)) // Requires permission level 2

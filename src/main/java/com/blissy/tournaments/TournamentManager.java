@@ -190,7 +190,7 @@ public class TournamentManager {
             Tournaments.LOGGER.info("Player {} joined tournament {}",
                     player.getName().getString(), tournamentName);
 
-            // Show title to player that they've joined
+            // Show title to player that they've joined (CHANGED FROM CHAT TO TITLE)
             BroadcastUtil.sendTitle(player, "Joined Tournament", TextFormatting.GREEN, 10, 70, 20);
             BroadcastUtil.sendSubtitle(player, tournamentName, TextFormatting.GREEN, 10, 70, 20);
 
@@ -225,15 +225,10 @@ public class TournamentManager {
             Tournaments.LOGGER.info("Player {} left tournament {}",
                     player.getName().getString(), tournamentName);
 
-            // Remove tournament if empty
-            if (tournament.getParticipantCount() == 0) {
-                tournaments.remove(tournamentName);
-                tournamentSettings.remove(tournamentName);
-                tournamentExtraSettings.remove(tournamentName);
-                MinecraftForge.EVENT_BUS.post(new TournamentEvent.Ended(tournament));
+            // CHANGED FROM CHAT TO TITLE
+            BroadcastUtil.sendTitle(player, "Left Tournament", TextFormatting.YELLOW, 10, 70, 20);
+            BroadcastUtil.sendSubtitle(player, tournamentName, TextFormatting.YELLOW, 10, 70, 20);
 
-                Tournaments.LOGGER.info("Tournament {} removed (no participants)", tournamentName);
-            }
 
             return true;
         }

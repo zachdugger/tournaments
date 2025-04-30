@@ -1,6 +1,7 @@
 package com.blissy.tournaments;
 
 import com.blissy.tournaments.config.EloConfig;
+import com.blissy.tournaments.config.NotificationConfig;
 import com.blissy.tournaments.config.TournamentsConfig;
 import com.blissy.tournaments.config.UIConfigLoader;
 import com.blissy.tournaments.data.RecurringTournament;
@@ -57,7 +58,8 @@ public class Tournaments {
         // Register configs
         TournamentsConfig.register();
         EloConfig.register();
-
+        // Register notification config
+        NotificationConfig.register();
         LOGGER.info("Tournaments mod initializing");
 
         // Initialize UI config with defaults immediately

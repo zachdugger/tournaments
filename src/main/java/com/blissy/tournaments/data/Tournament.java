@@ -457,9 +457,9 @@ public class Tournament {
 
     /**
      * Record a match result
-     * @param winnerUUID UUID of the winning player
-     * @param loserUUID UUID of the losing player
-     * @return true if result was recorded successfully
+     * @param winnerUUID UUID of the winner
+     * @param loserUUID UUID of the loser
+     * @return True if result was recorded successfully
      */
     public boolean recordMatchResult(UUID winnerUUID, UUID loserUUID) {
         // Find the match
@@ -533,13 +533,14 @@ public class Tournament {
                 eliminatePlayer(loserUUID);
             }
 
-            // Broadcast the result
+            // Broadcast the result using the new method
             String winnerName = participants.containsKey(winnerUUID) ?
                     participants.get(winnerUUID).getPlayerName() : "Unknown";
             String loserName = participants.containsKey(loserUUID) ?
                     participants.get(loserUUID).getPlayerName() : "Unknown";
 
-            broadcastActionBar(winnerName + " has defeated " + loserName + " and advances to the next round!");
+            // CHANGED from broadcastMessage to broadcastMatchResult
+            broadcastMatchResult(winnerName, loserName);
 
             // Check if round is complete
             checkRoundCompletion();
@@ -702,14 +703,15 @@ public class Tournament {
 
     /**
      * Broadcast a message to all tournament participants as a title and subtitle
+     * Uses improved styling for better readability
      */
     public void broadcastTitle(String title, String subtitle) {
         for (TournamentParticipant participant : participants.values()) {
             ServerPlayerEntity player = participant.getPlayer();
             if (player != null) {
-                BroadcastUtil.sendTitle(player, title, TextFormatting.GOLD, 10, 70, 20);
+                BroadcastUtil.sendTitle(player, title, TextFormatting.GOLD, 10, 60, 20);
                 if (subtitle != null && !subtitle.isEmpty()) {
-                    BroadcastUtil.sendSubtitle(player, subtitle, TextFormatting.YELLOW, 10, 70, 20);
+                    BroadcastUtil.sendSubtitle(player, subtitle, TextFormatting.YELLOW, 10, 60, 20);
                 }
             }
         }
@@ -717,6 +719,7 @@ public class Tournament {
 
     /**
      * Broadcast a message to all tournament participants as an actionbar message
+     * This is the least intrusive notification format
      */
     public void broadcastActionBar(String message) {
         for (TournamentParticipant participant : participants.values()) {
@@ -728,30 +731,43 @@ public class Tournament {
     }
 
     /**
-     * Modified broadcast message - now uses action bar by default
-     * Original chat message functionality is preserved but optional
+     * Broadcast an important notification to all participants
+     * Uses the notification bar for more visibility
      */
-    public void broadcastMessage(String message, boolean alsoSendChat) {
-        // Send to action bar
-        broadcastActionBar(message);
-
-        // Also send to chat if requested
-        if (alsoSendChat) {
-            for (TournamentParticipant participant : participants.values()) {
-                ServerPlayerEntity player = participant.getPlayer();
-                if (player != null) {
-                    player.sendMessage(
-                            new StringTextComponent("[Tournament: " + name + "] " + message)
-                                    .withStyle(TextFormatting.GOLD),
-                            player.getUUID());
-                }
+    public void broadcastNotification(String message) {
+        for (TournamentParticipant participant : participants.values()) {
+            ServerPlayerEntity player = participant.getPlayer();
+            if (player != null) {
+                BroadcastUtil.sendNotificationBar(player, message);
             }
         }
     }
 
-    // Override old broadcast method to maintain compatibility
+    /**
+     * Broadcast a match result with styled formatting
+     * Displays who won the match with appropriate styling
+     */
+    public void broadcastMatchResult(String winnerName, String loserName) {
+        broadcastNotification(winnerName + " has defeated " + loserName);
+        broadcastActionBar(winnerName + " advances to the next round!");
+    }
+
+    /**
+     * Modified broadcast message - now uses ONLY action bar and title notifications
+     * No chat messages will be sent
+     */
     public void broadcastMessage(String message) {
-        broadcastMessage(message, false);  // Don't send to chat by default
+        // Default to action bar notifications for all messages
+        broadcastActionBar(message);
+    }
+
+    /**
+     * Modified broadcast message - now uses ONLY action bar and title notifications
+     * No chat messages will be sent regardless of alsoSendChat parameter
+     */
+    public void broadcastMessage(String message, boolean alsoSendChat) {
+        // Ignore alsoSendChat parameter - we never send to chat now
+        broadcastActionBar(message);
     }
 
     // Getters and utility methods
