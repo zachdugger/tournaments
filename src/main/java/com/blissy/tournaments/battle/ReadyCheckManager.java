@@ -3,8 +3,8 @@ package com.blissy.tournaments.battle;
 import com.blissy.tournaments.Tournaments;
 import com.blissy.tournaments.data.Tournament;
 import com.blissy.tournaments.data.TournamentMatch;
+import com.blissy.tournaments.util.BroadcastUtil;
 import net.minecraft.entity.player.ServerPlayerEntity;
-import net.minecraft.util.text.StringTextComponent;
 import net.minecraft.util.text.TextFormatting;
 
 import java.util.HashMap;
@@ -34,10 +34,7 @@ public class ReadyCheckManager {
         // Find the player's current match
         TournamentMatch match = findPlayerCurrentMatch(playerId, tournament);
         if (match == null) {
-            player.sendMessage(
-                    new StringTextComponent("You don't have an active match scheduled")
-                            .withStyle(TextFormatting.RED),
-                    player.getUUID());
+            BroadcastUtil.sendTitle(player, "No Active Match", TextFormatting.RED, 10, 70, 20);
             return false;
         }
 
@@ -59,58 +56,55 @@ public class ReadyCheckManager {
         }
 
         // Notify players
-        player.sendMessage(
-                new StringTextComponent("You are now ready for your match!")
-                        .withStyle(TextFormatting.GREEN),
-                player.getUUID());
+        BroadcastUtil.sendTitle(player, "Ready!", TextFormatting.GREEN, 10, 70, 20);
 
         // Check if opponent is also ready
         if (readyPlayers.getOrDefault(opponentId, false)) {
             // Both players are ready, start the battle
             if (opponent != null) {
-                player.sendMessage(
-                        new StringTextComponent("Both players are ready! Starting battle...")
-                                .withStyle(TextFormatting.GOLD),
-                        player.getUUID());
-
-                opponent.sendMessage(
-                        new StringTextComponent("Both players are ready! Starting battle...")
-                                .withStyle(TextFormatting.GOLD),
-                        opponent.getUUID());
+                // Send countdown to both players
+                BroadcastUtil.runCountdown(player, "Battle Starting", 3, null);
+                BroadcastUtil.runCountdown(opponent, "Battle Starting", 3, null);
 
                 // Mark match as in progress
                 match.start();
 
-                // Initiate the battle
-                // Store the format in a final variable for the lambda
-                final String battleFormat = null; // Set to a specific format if needed
+                // Create final copies of the variables for use in the lambda
+                final ServerPlayerEntity finalPlayer = player;
+                final ServerPlayerEntity finalOpponent = opponent;
+                final TournamentMatch finalMatch = match;
 
-                // Initiate the battle
-                com.blissy.tournaments.compat.PixelmonHandler.createTournamentBattle(player, opponent);
+                // Initiate the battle after countdown (3.5 sec delay)
+                if (player.getServer() != null) {
+                    player.getServer().tell(new net.minecraft.util.concurrent.TickDelayedTask(
+                            70, // 3.5 seconds (after 3s countdown)
+                            () -> {
+                                // Initiate the battle with the final variables
+                                com.blissy.tournaments.compat.PixelmonHandler.createTournamentBattle(finalPlayer, finalOpponent);
 
-                // Clear ready status for this match
-                clearReadyStatus(match);
+                                // Clear ready status for this match
+                                clearReadyStatus(finalMatch);
+                            }
+                    ));
+                } else {
+                    // Fallback if server is null (shouldn't happen)
+                    com.blissy.tournaments.compat.PixelmonHandler.createTournamentBattle(player, opponent);
+                    clearReadyStatus(match);
+                }
 
                 return true;
             } else {
-                player.sendMessage(
-                        new StringTextComponent("Your opponent is offline. Please wait for them to reconnect.")
-                                .withStyle(TextFormatting.RED),
-                        player.getUUID());
+                BroadcastUtil.sendTitle(player, "Opponent Offline", TextFormatting.RED, 10, 70, 20);
+                BroadcastUtil.sendSubtitle(player, "Please wait for them to reconnect", TextFormatting.RED, 10, 70, 20);
                 return false;
             }
         } else {
             // Opponent not ready yet
-            player.sendMessage(
-                    new StringTextComponent("Waiting for your opponent to be ready...")
-                            .withStyle(TextFormatting.YELLOW),
-                    player.getUUID());
+            BroadcastUtil.sendSubtitle(player, "Waiting for opponent...", TextFormatting.YELLOW, 10, 70, 20);
 
             if (opponent != null) {
-                opponent.sendMessage(
-                        new StringTextComponent(player.getName().getString() + " is ready for your match! Type /tournament ready when you're ready to battle.")
-                                .withStyle(TextFormatting.YELLOW),
-                        opponent.getUUID());
+                BroadcastUtil.sendTitle(opponent, player.getName().getString() + " is Ready", TextFormatting.YELLOW, 10, 70, 20);
+                BroadcastUtil.sendSubtitle(opponent, "Type /tournament ready when you're ready", TextFormatting.YELLOW, 10, 70, 20);
             }
 
             return false;

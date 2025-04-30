@@ -3,6 +3,7 @@ package com.blissy.tournaments.data;
 import com.blissy.tournaments.battle.ScheduledBattleManager;
 import com.blissy.tournaments.config.TournamentsConfig;
 import com.blissy.tournaments.Tournaments;
+import com.blissy.tournaments.util.BroadcastUtil;
 import com.blissy.tournaments.util.TeleportUtil;
 import net.minecraft.entity.player.ServerPlayerEntity;
 import net.minecraft.util.text.StringTextComponent;
@@ -92,19 +93,15 @@ public class Tournament {
     public boolean addParticipant(ServerPlayerEntity player) {
         // Check tournament status
         if (status != TournamentStatus.WAITING) {
-            player.sendMessage(
-                    new StringTextComponent("This tournament has already started.")
-                            .withStyle(TextFormatting.RED),
-                    player.getUUID());
+            BroadcastUtil.sendTitle(player, "Tournament Already Started", TextFormatting.RED, 10, 70, 20);
+            BroadcastUtil.sendSubtitle(player, "Cannot join now", TextFormatting.RED, 10, 70, 20);
             return false;
         }
 
         // Check participant limit
         if (participants.size() >= maxParticipants) {
-            player.sendMessage(
-                    new StringTextComponent("This tournament is full.")
-                            .withStyle(TextFormatting.RED),
-                    player.getUUID());
+            BroadcastUtil.sendTitle(player, "Tournament Full", TextFormatting.RED, 10, 70, 20);
+            BroadcastUtil.sendSubtitle(player, "This tournament is full", TextFormatting.RED, 10, 70, 20);
             return false;
         }
 
@@ -113,7 +110,11 @@ public class Tournament {
         participants.put(playerId, participant);
 
         // Broadcast join message
-        broadcastMessage(player.getName().getString() + " has joined the tournament!");
+        broadcastActionBar(player.getName().getString() + " has joined the tournament!");
+
+        // Show welcome message to the joining player
+        BroadcastUtil.sendTitle(player, "Joined Tournament", TextFormatting.GREEN, 10, 70, 20);
+        BroadcastUtil.sendSubtitle(player, name, TextFormatting.YELLOW, 10, 70, 20);
 
         return true;
     }
@@ -146,7 +147,11 @@ public class Tournament {
         participants.remove(playerId);
 
         // Broadcast leave message
-        broadcastMessage(player.getName().getString() + " has left the tournament.");
+        broadcastActionBar(player.getName().getString() + " has left the tournament");
+
+        // Send leave confirmation to player
+        BroadcastUtil.sendTitle(player, "Left Tournament", TextFormatting.YELLOW, 10, 70, 20);
+        BroadcastUtil.sendSubtitle(player, name, TextFormatting.YELLOW, 10, 70, 20);
 
         // If host leaves, assign new host
         if (playerId.equals(hostId) && !participants.isEmpty()) {
@@ -154,10 +159,8 @@ public class Tournament {
             // Notify the new host
             ServerPlayerEntity newHost = participants.get(newHostId).getPlayer();
             if (newHost != null) {
-                newHost.sendMessage(
-                        new StringTextComponent("You are now the host of this tournament.")
-                                .withStyle(TextFormatting.GOLD),
-                        newHost.getUUID());
+                BroadcastUtil.sendTitle(newHost, "You Are Now Host", TextFormatting.GOLD, 10, 70, 20);
+                BroadcastUtil.sendSubtitle(newHost, "Previous host left the tournament", TextFormatting.YELLOW, 10, 70, 20);
             }
         }
 
@@ -167,8 +170,8 @@ public class Tournament {
             TournamentParticipant lastParticipant = participants.values().iterator().next();
 
             // Announce the last player as winner
-            broadcastMessage("Only one participant remains!");
-            broadcastMessage("★ Tournament Winner: " + lastParticipant.getPlayerName() + "! ★");
+            broadcastActionBar("Only one participant remains!");
+            broadcastTitle("Tournament Winner", lastParticipant.getPlayerName());
 
             // End the tournament with this participant as winner
             end();
@@ -178,7 +181,7 @@ public class Tournament {
     }
 
     /**
-     * Start the tournament
+     * Start the tournament with countdown
      */
     public void start() {
         // Check if we can start
@@ -187,7 +190,7 @@ public class Tournament {
         }
 
         if (participants.size() < 2) {
-            broadcastMessage("Cannot start tournament with fewer than 2 participants.");
+            broadcastTitle("Cannot Start Tournament", "Need at least 2 participants");
             return;
         }
 
@@ -198,31 +201,50 @@ public class Tournament {
         // Generate initial tournament bracket
         generateBracket();
 
-        broadcastMessage("Tournament has started!");
-        broadcastMessage("Battle format: " + battleFormat); // Announce battle format
+        // Announce tournament start with countdown
+        broadcastTitle("Tournament Starting", battleFormat + " Format");
 
-        // Teleport all participants to the entry point if teleports are enabled
-        if (TournamentsConfig.COMMON.enableTeleports.get()) {
-            broadcastMessage("Teleporting all participants to the tournament arena...");
-
-            for (TournamentParticipant participant : participants.values()) {
-                ServerPlayerEntity player = participant.getPlayer();
-                if (player != null && player.isAlive()) {
-                    boolean success = TeleportUtil.teleportToEntryPoint(player);
-                    if (!success) {
-                        Tournaments.LOGGER.warn("Failed to teleport player {} to tournament entry point",
-                                player.getName().getString());
-                        player.sendMessage(
-                                new StringTextComponent("Failed to teleport to tournament arena. Please contact an admin.")
-                                        .withStyle(TextFormatting.RED),
-                                player.getUUID());
+        // Run countdown for all participants
+        for (TournamentParticipant participant : participants.values()) {
+            ServerPlayerEntity player = participant.getPlayer();
+            if (player != null && player.isAlive() && player.getServer() != null) {
+                BroadcastUtil.runCountdown(player, "Starting in", 5, () -> {
+                    // Teleport after countdown if teleports are enabled
+                    if (TournamentsConfig.COMMON.enableTeleports.get()) {
+                        boolean success = TeleportUtil.teleportToEntryPoint(player);
+                        if (!success) {
+                            Tournaments.LOGGER.warn("Failed to teleport player {} to tournament entry point",
+                                    player.getName().getString());
+                            BroadcastUtil.sendActionBar(player, "Failed to teleport to tournament arena. Contact an admin.", TextFormatting.RED);
+                        }
                     }
-                }
+                });
             }
         }
 
-        // Schedule first round matches
-        scheduleCurrentRoundMatches();
+        // Schedule first round matches after 6 seconds (after countdown + teleport)
+        ServerPlayerEntity anyPlayer = getAnyPlayer();
+        if (anyPlayer != null && anyPlayer.getServer() != null) {
+            anyPlayer.getServer().tell(new net.minecraft.util.concurrent.TickDelayedTask(120, () -> {
+                scheduleCurrentRoundMatches();
+            }));
+        } else {
+            // Fallback if we can't get a player or server
+            scheduleCurrentRoundMatches();
+        }
+    }
+
+    /**
+     * Get any online player in the tournament for server tasks
+     */
+    private ServerPlayerEntity getAnyPlayer() {
+        for (TournamentParticipant participant : participants.values()) {
+            ServerPlayerEntity player = participant.getPlayer();
+            if (player != null) {
+                return player;
+            }
+        }
+        return null;
     }
 
     /**
@@ -239,28 +261,33 @@ public class Tournament {
         currentRound = 0;
 
         // Display tournament bracket
-        broadcastMessage("Tournament bracket generated!");
+        broadcastTitle("Tournament Bracket", "Generated");
+
+        // Send details as action bar messages
         for (int i = 0; i < currentRoundBracket.size(); i += 2) {
             if (i + 1 < currentRoundBracket.size()) {
                 String player1 = currentRoundBracket.get(i).getPlayerName();
                 String player2 = currentRoundBracket.get(i + 1).getPlayerName();
-                broadcastMessage("Match " + ((i/2) + 1) + ": " + player1 + " vs " + player2);
+                broadcastActionBar("Match " + ((i/2) + 1) + ": " + player1 + " vs " + player2);
             } else {
                 // Odd number, player gets a bye
                 String player = currentRoundBracket.get(i).getPlayerName();
-                broadcastMessage("Match " + ((i/2) + 1) + ": " + player + " receives a bye");
+                broadcastActionBar("Match " + ((i/2) + 1) + ": " + player + " receives a bye");
             }
         }
     }
 
     /**
-     * Schedule matches for the current round
+     * Schedule matches for the current round with on-screen notifications
      */
     private void scheduleCurrentRoundMatches() {
         List<TournamentParticipant> currentRoundBracket = brackets.get(currentRound);
 
         // Clear previous round matches
         matches.clear();
+
+        // Broadcast round start
+        broadcastTitle("Round " + (currentRound + 1), "Matches are being scheduled");
 
         // Create matches for current round
         for (int i = 0; i < currentRoundBracket.size(); i += 2) {
@@ -277,6 +304,10 @@ public class Tournament {
                 ServerPlayerEntity p2 = player2.getPlayer();
 
                 if (p1 != null && p2 != null) {
+                    // Announce match to all participants
+                    final String matchDescription = match.getDescription();
+                    broadcastActionBar("Match scheduled: " + matchDescription);
+
                     // Teleport players to their match positions
                     boolean p1Teleported = TeleportUtil.teleportToMatchPosition(p1, 1);
                     boolean p2Teleported = TeleportUtil.teleportToMatchPosition(p2, 2);
@@ -288,28 +319,35 @@ public class Tournament {
                         Tournaments.LOGGER.warn("Failed to teleport players to match positions");
                     }
 
-                    // Notify players about their match - single consolidated message
-                    p1.sendMessage(
-                            new StringTextComponent("Match started against " + p2.getName().getString() +
-                                    ". You've been teleported to your match position. Type /tournament ready when ready!")
-                                    .withStyle(TextFormatting.GOLD),
-                            p1.getUUID());
+                    // Special notification for match participants
+                    BroadcastUtil.sendTitle(p1, "Match Started", TextFormatting.GOLD, 10, 60, 20);
+                    BroadcastUtil.sendSubtitle(p1, "VS " + p2.getName().getString(), TextFormatting.YELLOW, 10, 60, 20);
 
-                    p2.sendMessage(
-                            new StringTextComponent("Match started against " + p1.getName().getString() +
-                                    ". You've been teleported to your match position. Type /tournament ready when ready!")
-                                    .withStyle(TextFormatting.GOLD),
-                            p2.getUUID());
+                    BroadcastUtil.sendTitle(p2, "Match Started", TextFormatting.GOLD, 10, 60, 20);
+                    BroadcastUtil.sendSubtitle(p2, "VS " + p1.getName().getString(), TextFormatting.YELLOW, 10, 60, 20);
 
-                    broadcastMessage("Match scheduled: " + match.getDescription());
+                    // After 3 seconds, show the ready command instruction
+                    if (p1.getServer() != null) {
+                        p1.getServer().tell(new net.minecraft.util.concurrent.TickDelayedTask(60, () -> {
+                            BroadcastUtil.sendTitle(p1, "Type /tournament ready", TextFormatting.GREEN, 10, 60, 20);
+                            BroadcastUtil.sendTitle(p2, "Type /tournament ready", TextFormatting.GREEN, 10, 60, 20);
+                        }));
+                    }
                 } else {
-                    broadcastMessage("Could not schedule match: " + match.getDescription() +
+                    broadcastActionBar("Could not schedule match: " + match.getDescription() +
                             " - one or both players offline");
                 }
             } else {
                 // Odd number of players, this player gets a bye to next round
                 TournamentParticipant player = currentRoundBracket.get(i);
-                broadcastMessage(player.getPlayerName() + " advances to next round with a bye");
+                broadcastActionBar(player.getPlayerName() + " advances to next round with a bye");
+
+                // Notify the player who got a bye
+                ServerPlayerEntity byePlayer = player.getPlayer();
+                if (byePlayer != null) {
+                    BroadcastUtil.sendTitle(byePlayer, "You Got a Bye", TextFormatting.GREEN, 10, 60, 20);
+                    BroadcastUtil.sendSubtitle(byePlayer, "Advancing to next round", TextFormatting.YELLOW, 10, 60, 20);
+                }
             }
         }
     }
@@ -344,41 +382,35 @@ public class Tournament {
         if (player != null && player.isAlive() && TournamentsConfig.COMMON.enableTeleports.get()) {
             Tournaments.LOGGER.info("Teleporting eliminated player {} to exit point", playerName);
 
+            // Show elimination message
+            BroadcastUtil.sendTitle(player, "Eliminated", TextFormatting.RED, 10, 70, 20);
+            BroadcastUtil.sendSubtitle(player, "You are out of the tournament", TextFormatting.YELLOW, 10, 70, 20);
+
             boolean success = TeleportUtil.teleportToExitPoint(player);
             if (!success) {
                 Tournaments.LOGGER.warn("Failed to teleport eliminated player {} to exit point", playerName);
 
                 // Try again after a short delay
-                player.getServer().tell(new net.minecraft.util.concurrent.TickDelayedTask(20, () -> {
-                    Tournaments.LOGGER.info("Attempting delayed teleport for eliminated player {}", playerName);
-                    boolean delayedSuccess = TeleportUtil.teleportToExitPoint(player);
+                if (player.getServer() != null) {
+                    player.getServer().tell(new net.minecraft.util.concurrent.TickDelayedTask(20, () -> {
+                        Tournaments.LOGGER.info("Attempting delayed teleport for eliminated player {}", playerName);
+                        boolean delayedSuccess = TeleportUtil.teleportToExitPoint(player);
 
-                    if (!delayedSuccess) {
-                        Tournaments.LOGGER.error("Delayed teleport for eliminated player {} also failed", playerName);
-                        player.sendMessage(
-                                new net.minecraft.util.text.StringTextComponent(
-                                        "You have been eliminated from the tournament. You can use /spawn to return to spawn.")
-                                        .withStyle(net.minecraft.util.text.TextFormatting.RED),
-                                player.getUUID());
-                    }
-                }));
-            } else {
-                // Only send one message for elimination
-                player.sendMessage(
-                        new net.minecraft.util.text.StringTextComponent("You have been eliminated from the tournament!")
-                                .withStyle(net.minecraft.util.text.TextFormatting.RED),
-                        player.getUUID());
+                        if (!delayedSuccess) {
+                            Tournaments.LOGGER.error("Delayed teleport for eliminated player {} also failed", playerName);
+                            BroadcastUtil.sendActionBar(player, "You have been eliminated. Use /spawn to return to spawn.", TextFormatting.RED);
+                        }
+                    }));
+                }
             }
         } else if (player != null) {
             // Notify even if we can't teleport
-            player.sendMessage(
-                    new net.minecraft.util.text.StringTextComponent("You have been eliminated from the tournament!")
-                            .withStyle(net.minecraft.util.text.TextFormatting.RED),
-                    player.getUUID());
+            BroadcastUtil.sendTitle(player, "Eliminated", TextFormatting.RED, 10, 70, 20);
+            BroadcastUtil.sendSubtitle(player, "You are out of the tournament", TextFormatting.YELLOW, 10, 70, 20);
         }
 
-        // Broadcast elimination message - consolidated with match result in recordMatchResult
-        // No need for a separate broadcast here
+        // Broadcast elimination message to all participants
+        broadcastActionBar(playerName + " has been eliminated from the tournament");
 
         // Check if only one active player remains
         int activePlayersRemaining = participants.size() - eliminatedPlayers.size();
@@ -394,8 +426,16 @@ public class Tournament {
 
             // If we found the last active player, they win
             if (lastActive != null) {
-                broadcastMessage("Only one participant remains active!");
-                broadcastMessage("★ Tournament Winner: " + lastActive.getPlayerName() + "! ★");
+                broadcastActionBar("Only one participant remains active!");
+                broadcastTitle("Tournament Winner", lastActive.getPlayerName());
+
+                // Show winning message to the winner
+                ServerPlayerEntity winner = lastActive.getPlayer();
+                if (winner != null) {
+                    BroadcastUtil.sendTitle(winner, "Victory!", TextFormatting.GOLD, 10, 100, 20);
+                    BroadcastUtil.sendSubtitle(winner, "You are the tournament champion", TextFormatting.YELLOW, 10, 100, 20);
+                }
+
                 end();
             }
         }
@@ -481,10 +521,7 @@ public class Tournament {
                     if (teleported) {
                         Tournaments.LOGGER.info("Teleported winner {} back to entry point",
                                 winner.getName().getString());
-                        winner.sendMessage(
-                                new StringTextComponent("You won! You've been teleported back to the tournament area.")
-                                        .withStyle(TextFormatting.GREEN),
-                                winner.getUUID());
+                        // Victory message handled in match complete method
                     }
                 }
             }
@@ -496,13 +533,13 @@ public class Tournament {
                 eliminatePlayer(loserUUID);
             }
 
-            // Broadcast the result - single broadcast message
+            // Broadcast the result
             String winnerName = participants.containsKey(winnerUUID) ?
                     participants.get(winnerUUID).getPlayerName() : "Unknown";
             String loserName = participants.containsKey(loserUUID) ?
                     participants.get(loserUUID).getPlayerName() : "Unknown";
 
-            broadcastMessage(winnerName + " has defeated " + loserName + " and advances to the next round!");
+            broadcastActionBar(winnerName + " has defeated " + loserName + " and advances to the next round!");
 
             // Check if round is complete
             checkRoundCompletion();
@@ -539,7 +576,7 @@ public class Tournament {
         // Determine winners from current round
         List<TournamentParticipant> winners = new ArrayList<>();
 
-        // Get winners from completed matches - this is the fixed determineRoundWinners implementation
+        // Get winners from completed matches
         for (TournamentMatch match : matches) {
             if (match.getStatus() == TournamentMatch.MatchStatus.COMPLETED) {
                 UUID winnerId = match.getWinnerId();
@@ -568,6 +605,18 @@ public class Tournament {
 
         // If only one winner, end tournament
         if (winners.size() <= 1) {
+            if (winners.size() == 1) {
+                // Announce the winner
+                TournamentParticipant winner = winners.get(0);
+                broadcastTitle("Tournament Winner", winner.getPlayerName());
+
+                // Show winning message to the winner
+                ServerPlayerEntity winnerPlayer = winner.getPlayer();
+                if (winnerPlayer != null) {
+                    BroadcastUtil.sendTitle(winnerPlayer, "Victory!", TextFormatting.GOLD, 10, 100, 20);
+                    BroadcastUtil.sendSubtitle(winnerPlayer, "You are the tournament champion", TextFormatting.YELLOW, 10, 100, 20);
+                }
+            }
             end();
             return;
         }
@@ -576,17 +625,24 @@ public class Tournament {
         brackets.add(winners);
         currentRound++;
 
-        broadcastMessage("Advancing to Round " + (currentRound + 1) +
-                ". Remaining participants: " + winners.size());
+        // Announce next round
+        broadcastTitle("Round " + (currentRound + 1), winners.size() + " participants remaining");
 
         // Schedule next round matches with a short delay
         // Use a delayed task to give time for teleportation to complete
-        net.minecraftforge.fml.server.ServerLifecycleHooks.getCurrentServer().tell(
-                new net.minecraft.util.concurrent.TickDelayedTask(20, () -> {
-                    scheduleCurrentRoundMatches();
-                    Tournaments.LOGGER.info("Scheduled matches for round {}", currentRound + 1);
-                })
-        );
+        ServerPlayerEntity anyPlayer = getAnyPlayer();
+        if (anyPlayer != null && anyPlayer.getServer() != null) {
+            anyPlayer.getServer().tell(
+                    new net.minecraft.util.concurrent.TickDelayedTask(60, () -> {
+                        scheduleCurrentRoundMatches();
+                        Tournaments.LOGGER.info("Scheduled matches for round {}", currentRound + 1);
+                    })
+            );
+        } else {
+            // Fallback if we can't get a player or server
+            scheduleCurrentRoundMatches();
+            Tournaments.LOGGER.info("Scheduled matches for round {}", currentRound + 1);
+        }
     }
 
     /**
@@ -603,21 +659,19 @@ public class Tournament {
         // Determine and announce winner
         TournamentParticipant winner = determineOverallWinner();
         if (winner != null) {
-            broadcastMessage("★ Tournament Winner: " + winner.getPlayerName() + "! ★");
+            broadcastTitle("Tournament Ended", winner.getPlayerName() + " wins!");
 
-            // Give rewards if enabled
-            if (TournamentsConfig.COMMON.enableRewards.get()) {
-                ServerPlayerEntity playerEntity = winner.getPlayer();
-                if (playerEntity != null) {
+            // Show victory message to winner
+            ServerPlayerEntity playerEntity = winner.getPlayer();
+            if (playerEntity != null) {
+                // Give rewards if enabled
+                if (TournamentsConfig.COMMON.enableRewards.get()) {
                     // Implement reward logic here
-                    playerEntity.sendMessage(
-                            new StringTextComponent("You've received tournament rewards!")
-                                    .withStyle(TextFormatting.GOLD),
-                            playerEntity.getUUID());
+                    BroadcastUtil.sendActionBar(playerEntity, "You've received tournament rewards!", TextFormatting.GOLD);
                 }
             }
         } else {
-            broadcastMessage("Tournament concluded with no clear winner.");
+            broadcastTitle("Tournament Ended", "No clear winner");
         }
     }
 
@@ -647,18 +701,57 @@ public class Tournament {
     }
 
     /**
-     * Broadcast a message to all tournament participants
+     * Broadcast a message to all tournament participants as a title and subtitle
      */
-    public void broadcastMessage(String message) {
+    public void broadcastTitle(String title, String subtitle) {
         for (TournamentParticipant participant : participants.values()) {
             ServerPlayerEntity player = participant.getPlayer();
             if (player != null) {
-                player.sendMessage(
-                        new StringTextComponent("[Tournament: " + name + "] " + message)
-                                .withStyle(TextFormatting.GOLD),
-                        player.getUUID());
+                BroadcastUtil.sendTitle(player, title, TextFormatting.GOLD, 10, 70, 20);
+                if (subtitle != null && !subtitle.isEmpty()) {
+                    BroadcastUtil.sendSubtitle(player, subtitle, TextFormatting.YELLOW, 10, 70, 20);
+                }
             }
         }
+    }
+
+    /**
+     * Broadcast a message to all tournament participants as an actionbar message
+     */
+    public void broadcastActionBar(String message) {
+        for (TournamentParticipant participant : participants.values()) {
+            ServerPlayerEntity player = participant.getPlayer();
+            if (player != null) {
+                BroadcastUtil.sendActionBar(player, message, TextFormatting.GOLD);
+            }
+        }
+    }
+
+    /**
+     * Modified broadcast message - now uses action bar by default
+     * Original chat message functionality is preserved but optional
+     */
+    public void broadcastMessage(String message, boolean alsoSendChat) {
+        // Send to action bar
+        broadcastActionBar(message);
+
+        // Also send to chat if requested
+        if (alsoSendChat) {
+            for (TournamentParticipant participant : participants.values()) {
+                ServerPlayerEntity player = participant.getPlayer();
+                if (player != null) {
+                    player.sendMessage(
+                            new StringTextComponent("[Tournament: " + name + "] " + message)
+                                    .withStyle(TextFormatting.GOLD),
+                            player.getUUID());
+                }
+            }
+        }
+    }
+
+    // Override old broadcast method to maintain compatibility
+    public void broadcastMessage(String message) {
+        broadcastMessage(message, false);  // Don't send to chat by default
     }
 
     // Getters and utility methods

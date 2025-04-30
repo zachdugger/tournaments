@@ -3,8 +3,10 @@ package com.blissy.tournaments;
 import com.blissy.tournaments.data.Tournament;
 import com.blissy.tournaments.data.TournamentMatch;
 import com.blissy.tournaments.events.TournamentEvent;
+import com.blissy.tournaments.util.BroadcastUtil;
 import net.minecraft.entity.player.ServerPlayerEntity;
 import net.minecraft.nbt.CompoundNBT;
+import net.minecraft.util.text.TextFormatting;
 import net.minecraftforge.common.MinecraftForge;
 
 import java.time.Instant;
@@ -112,28 +114,22 @@ public class TournamentManager {
         // Check tournament exists
         Tournament tournament = tournaments.get(tournamentName);
         if (tournament == null) {
-            player.sendMessage(
-                    new net.minecraft.util.text.StringTextComponent("Tournament doesn't exist: " + tournamentName)
-                            .withStyle(net.minecraft.util.text.TextFormatting.RED),
-                    player.getUUID());
+            BroadcastUtil.sendTitle(player, "Tournament Not Found", TextFormatting.RED, 10, 70, 20);
+            BroadcastUtil.sendSubtitle(player, tournamentName, TextFormatting.RED, 10, 70, 20);
             return false;
         }
 
         // Check if player is already in a tournament
         if (playerTournaments.containsKey(player.getUUID())) {
-            player.sendMessage(
-                    new net.minecraft.util.text.StringTextComponent("You are already in a tournament. Leave your current tournament first.")
-                            .withStyle(net.minecraft.util.text.TextFormatting.RED),
-                    player.getUUID());
+            BroadcastUtil.sendTitle(player, "Already In Tournament", TextFormatting.RED, 10, 70, 20);
+            BroadcastUtil.sendSubtitle(player, "Leave your current tournament first", TextFormatting.RED, 10, 70, 20);
             return false;
         }
 
         // Check if tournament is waiting for players
         if (tournament.getStatus() != Tournament.TournamentStatus.WAITING) {
-            player.sendMessage(
-                    new net.minecraft.util.text.StringTextComponent("This tournament has already started and cannot be joined.")
-                            .withStyle(net.minecraft.util.text.TextFormatting.RED),
-                    player.getUUID());
+            BroadcastUtil.sendTitle(player, "Tournament Already Started", TextFormatting.RED, 10, 70, 20);
+            BroadcastUtil.sendSubtitle(player, "Cannot join now", TextFormatting.RED, 10, 70, 20);
             return false;
         }
 
@@ -161,11 +157,8 @@ public class TournamentManager {
                             .invoke(null, player, entryFee);
 
                     if (!hasBalance) {
-                        player.sendMessage(
-                                new net.minecraft.util.text.StringTextComponent(
-                                        "You don't have enough money to join this tournament. Entry fee: " + entryFee)
-                                        .withStyle(net.minecraft.util.text.TextFormatting.RED),
-                                player.getUUID());
+                        BroadcastUtil.sendTitle(player, "Insufficient Funds", TextFormatting.RED, 10, 70, 20);
+                        BroadcastUtil.sendSubtitle(player, "Entry fee: " + entryFee, TextFormatting.RED, 10, 70, 20);
                         return false;
                     }
 
@@ -174,19 +167,12 @@ public class TournamentManager {
                             .invoke(null, player, entryFee);
 
                     if (!withdrawn) {
-                        player.sendMessage(
-                                new net.minecraft.util.text.StringTextComponent(
-                                        "Failed to process the entry fee. Tournament join canceled.")
-                                        .withStyle(net.minecraft.util.text.TextFormatting.RED),
-                                player.getUUID());
+                        BroadcastUtil.sendTitle(player, "Payment Error", TextFormatting.RED, 10, 70, 20);
+                        BroadcastUtil.sendSubtitle(player, "Failed to process entry fee", TextFormatting.RED, 10, 70, 20);
                         return false;
                     }
 
-                    player.sendMessage(
-                            new net.minecraft.util.text.StringTextComponent(
-                                    "You have paid " + entryFee + " to enter the tournament")
-                                    .withStyle(net.minecraft.util.text.TextFormatting.GREEN),
-                            player.getUUID());
+                    BroadcastUtil.sendActionBar(player, "Paid " + entryFee + " to enter tournament", TextFormatting.GREEN);
                 } catch (Exception e) {
                     // If economy plugin is not available, log warning but still allow join
                     Tournaments.LOGGER.warn("Economy plugin not available. Entry fee not processed.");
@@ -203,6 +189,10 @@ public class TournamentManager {
 
             Tournaments.LOGGER.info("Player {} joined tournament {}",
                     player.getName().getString(), tournamentName);
+
+            // Show title to player that they've joined
+            BroadcastUtil.sendTitle(player, "Joined Tournament", TextFormatting.GREEN, 10, 70, 20);
+            BroadcastUtil.sendSubtitle(player, tournamentName, TextFormatting.GREEN, 10, 70, 20);
 
             return true;
         }

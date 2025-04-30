@@ -1,7 +1,10 @@
 package com.blissy.tournaments.data;
 
 import com.blissy.tournaments.Tournaments;
+import com.blissy.tournaments.util.BroadcastUtil;
 import net.minecraft.entity.player.ServerPlayerEntity;
+import net.minecraft.util.text.TextFormatting;
+import net.minecraftforge.fml.server.ServerLifecycleHooks;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -43,6 +46,20 @@ public class TournamentMatch {
         this.status = MatchStatus.IN_PROGRESS;
         this.startedAt = Instant.now();
         Tournaments.LOGGER.info("Match started: {} vs {}", player1Name, player2Name);
+
+        // Find player entities and notify them
+        ServerPlayerEntity player1 = findPlayer(player1Id);
+        ServerPlayerEntity player2 = findPlayer(player2Id);
+
+        if (player1 != null) {
+            BroadcastUtil.sendTitle(player1, "Match Started", TextFormatting.GOLD, 10, 60, 20);
+            BroadcastUtil.sendSubtitle(player1, "VS " + player2Name, TextFormatting.YELLOW, 10, 60, 20);
+        }
+
+        if (player2 != null) {
+            BroadcastUtil.sendTitle(player2, "Match Started", TextFormatting.GOLD, 10, 60, 20);
+            BroadcastUtil.sendSubtitle(player2, "VS " + player1Name, TextFormatting.YELLOW, 10, 60, 20);
+        }
     }
 
     /**
@@ -58,8 +75,23 @@ public class TournamentMatch {
 
             String winnerName = winnerId.equals(player1Id) ? player1Name : player2Name;
             String loserName = winnerId.equals(player1Id) ? player2Name : player1Name;
+            UUID loserId = winnerId.equals(player1Id) ? player2Id : player1Id;
 
             Tournaments.LOGGER.info("Match completed: {} defeated {}", winnerName, loserName);
+
+            // Find player entities and notify them
+            ServerPlayerEntity winner = findPlayer(winnerId);
+            ServerPlayerEntity loser = findPlayer(loserId);
+
+            if (winner != null) {
+                BroadcastUtil.sendTitle(winner, "Victory!", TextFormatting.GREEN, 10, 60, 20);
+                BroadcastUtil.sendSubtitle(winner, "You defeated " + loserName, TextFormatting.YELLOW, 10, 60, 20);
+            }
+
+            if (loser != null) {
+                BroadcastUtil.sendTitle(loser, "Defeat", TextFormatting.RED, 10, 60, 20);
+                BroadcastUtil.sendSubtitle(loser, winnerName + " has won", TextFormatting.YELLOW, 10, 60, 20);
+            }
 
             return true;
         }
@@ -72,6 +104,18 @@ public class TournamentMatch {
     public void cancel() {
         this.status = MatchStatus.CANCELLED;
         Tournaments.LOGGER.info("Match cancelled: {} vs {}", player1Name, player2Name);
+
+        // Notify both players
+        ServerPlayerEntity player1 = findPlayer(player1Id);
+        ServerPlayerEntity player2 = findPlayer(player2Id);
+
+        if (player1 != null) {
+            BroadcastUtil.sendTitle(player1, "Match Cancelled", TextFormatting.RED, 10, 60, 20);
+        }
+
+        if (player2 != null) {
+            BroadcastUtil.sendTitle(player2, "Match Cancelled", TextFormatting.RED, 10, 60, 20);
+        }
     }
 
     /**
@@ -101,6 +145,14 @@ public class TournamentMatch {
             return -1;
         }
         return completedAt.toEpochMilli() - startedAt.toEpochMilli();
+    }
+
+    /**
+     * Find a player by UUID
+     */
+    private ServerPlayerEntity findPlayer(UUID playerId) {
+        return ServerLifecycleHooks.getCurrentServer()
+                .getPlayerList().getPlayer(playerId);
     }
 
     // Getters
